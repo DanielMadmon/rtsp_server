@@ -8,8 +8,13 @@
 #include "net/Timer.h"
 #include "bs.h"
 #include "h265_stream.h"
+#include "log.hpp"
+#include <csignal>
+
+#define LOG_LEVEL LOG_LEVEL_DEBUG
 
 static volatile bool    s_spnet_loop;
+static volatile int32_t s_client_count;
 static pthread_mutex_t  s_main_lock;
 static pthread_cond_t   s_frame_cond;
 
@@ -181,7 +186,7 @@ int H265File::ReadFrame(char* in_buf, int in_buf_size, bool* end)
         if (nal_unit == 0x20 || nal_unit == 0x21 || nal_unit == 0x22 || nal_unit == 0x27 || nal_unit == 0x28
             ||
             ((nal_unit == 0x0 || nal_unit == 0x1 || nal_unit == 0x8 || nal_unit == 0x9 || nal_unit == 0x13 || nal_unit == 0x14 || nal_unit == 0x15) && (slice_type >= 0 && slice_type <= 2))) {
-            //printf("slice_type:%d\n", slice_type); //debug
+            LOG_DEBUG("nal_unit: %d, slice_type: %d", nal_unit, slice_type);
             is_find_start = true;
             i += 4;
             break;
@@ -256,7 +261,7 @@ int H265File::ReadFrame(char* in_buf, int in_buf_size, bool* end)
         if (nal_unit == 0x20 || nal_unit == 0x21 || nal_unit == 0x22 || nal_unit == 0x27 || nal_unit == 0x28
             ||
             ((nal_unit == 0x0 || nal_unit == 0x1 || nal_unit == 0x8 || nal_unit == 0x9 || nal_unit == 0x13 || nal_unit == 0x14 || nal_unit == 0x15) && (slice_type >= 0 && slice_type <= 2))) {
-            //printf("slice_type:%d\n", slice_type); //debug
+            LOG_DEBUG("nal_unit: %d, slice_type: %d", nal_unit, slice_type);
             is_find_end = true;
             break;
         }
@@ -500,87 +505,82 @@ void SendFrameThread(xop::RtspServer* rtsp_server, xop::MediaSessionId session_i
     uint32_t sleep_video    = 0;
     uint32_t sleep_audio    = 0;
     std::unique_ptr<uint8_t> frame_buf(new uint8_t[buf_size]);
-
-    while(s_spnet_loop)
+    
+    while(1)
     {
-        /*if(clients > 0)
-        {
+        if(s_spnet_loop){
+            if( sleep_video % 40 == 0 )
             {
-
-                //获取一帧 H264, 打包
-                xop::AVFrame videoFrame = {0};
-                //videoFrame.type = 0; // 建议确定帧类型。I帧(xop::VIDEO_FRAME_I) P帧(xop::VIDEO_FRAME_P)
-                videoFrame.size = video frame size;  // 视频帧大小
-                videoFrame.timestamp = xop::H264Source::GetTimestamp(); // 时间戳, 建议使用编码器提供的时间戳
-                videoFrame.buffer.reset(new uint8_t[videoFrame.size]);
-                memcpy(videoFrame.buffer.get(), video frame data, videoFrame.size);
-
-                rtsp_server->PushFrame(session_id, xop::channel_0, videoFrame); //送到服务器进行转发, 接口线程安全
-
+                bool end_of_frame = false;
+                int frame_size = h265_file->ReadFrame((char*)frame_buf.get(), buf_size, &end_of_frame);
+                if(frame_size > 0) {
+                    xop::AVFrame videoFrame = {0};
+                    //videoFrame.type = 0;
+                    videoFrame.size = frame_size;
+                    //videoFrame.timestamp = xop::H265Source::GetTimestamp();
+                    xop::H265Source::GetTimestamp(&videoFrame.timeNow, &videoFrame.timestamp);
+                    videoFrame.buffer.reset(new uint8_t[videoFrame.size]);
+                    memcpy(videoFrame.buffer.get(), frame_buf.get(), videoFrame.size);
+                    rtsp_server->PushFrame(session_id, xop::channel_0, videoFrame);
+                }
+                else {
+                    break;
+                }
             }
 
+            if( sleep_audio % 18 == 0 )
             {
-
-                //获取一帧 AAC, 打包
-                xop::AVFrame audioFrame = {0};
-                //audioFrame.type = xop::AUDIO_FRAME;
-                audioFrame.size = audio frame size;  /* 音频帧大小
-                audioFrame.timestamp = xop::AACSource::GetTimestamp(44100); // 时间戳
-                audioFrame.buffer.reset(new uint8_t[audioFrame.size]);
-                memcpy(audioFrame.buffer.get(), audio frame data, audioFrame.size);
-
-                rtsp_server->PushFrame(session_id, xop::channel_1, audioFrame); // 送到服务器进行转发, 接口线程安全
-
+                bool end_of_frame = false;
+                int frame_size = aac_file->ReadFrame((char*)frame_buf.get(), buf_size, &end_of_frame);
+                if(frame_size > 0) {
+                    xop::AVFrame audioFrame = {0};
+                    //audioFrame.type = 0;
+                    audioFrame.size = frame_size;
+                    //audioFrame.timestamp = xop::AACSource::GetTimestamp();
+                    xop::AACSource::GetTimestamp(&audioFrame.timeNow, &audioFrame.timestamp);
+                    audioFrame.buffer.reset(new uint8_t[audioFrame.size]);
+                    memcpy(audioFrame.buffer.get(), frame_buf.get(), audioFrame.size);
+                    rtsp_server->PushFrame(session_id, xop::channel_1, audioFrame);
+                }
+                else {
+                    break;
+                }
             }
-        }*/
-        if( sleep_video % 40 == 0 )
-        {
-            bool end_of_frame = false;
-            int frame_size = h265_file->ReadFrame((char*)frame_buf.get(), buf_size, &end_of_frame);
-            if(frame_size > 0) {
-                xop::AVFrame videoFrame = {0};
-                //videoFrame.type = 0;
-                videoFrame.size = frame_size;
-                //videoFrame.timestamp = xop::H265Source::GetTimestamp();
-                xop::H265Source::GetTimestamp(&videoFrame.timeNow, &videoFrame.timestamp);
-                videoFrame.buffer.reset(new uint8_t[videoFrame.size]);
-                memcpy(videoFrame.buffer.get(), frame_buf.get(), videoFrame.size);
-                rtsp_server->PushFrame(session_id, xop::channel_0, videoFrame);
-            }
-            else {
-                break;
-            }
+
+            xop::Timer::Sleep(1);
+            sleep_video++;
+            sleep_audio++;
         }
-
-        if( sleep_audio % 18 == 0 )
-        {
-            bool end_of_frame = false;
-            int frame_size = aac_file->ReadFrame((char*)frame_buf.get(), buf_size, &end_of_frame);
-            if(frame_size > 0) {
-                xop::AVFrame audioFrame = {0};
-                //audioFrame.type = 0;
-                audioFrame.size = frame_size;
-                //audioFrame.timestamp = xop::AACSource::GetTimestamp();
-                xop::AACSource::GetTimestamp(&audioFrame.timeNow, &audioFrame.timestamp);
-                audioFrame.buffer.reset(new uint8_t[audioFrame.size]);
-                memcpy(audioFrame.buffer.get(), frame_buf.get(), audioFrame.size);
-                rtsp_server->PushFrame(session_id, xop::channel_1, audioFrame);
-            }
-            else {
-                break;
-            }
-        }
-
-        xop::Timer::Sleep(1);
-        sleep_video++;
-        sleep_audio++;
     }
-
-    pthread_cond_signal(&s_frame_cond);
 }
-
+void connect_callback(xop::MediaSessionId sessionId, std::string peer_ip, uint16_t peer_port)
+{
+    printf("RTSP client connect, ip=%s, port=%hu \n", peer_ip.c_str(), peer_port);
+    s_spnet_loop = true;
+    s_client_count++;
+}
+void disconnect_callback(xop::MediaSessionId sessionId, std::string peer_ip, uint16_t peer_port)
+{
+    printf("RTSP client disconnect, ip=%s, port=%hu \n", peer_ip.c_str(), peer_port);
+    if(s_client_count > 0) {
+        s_client_count--;
+    }
+    s_spnet_loop = s_client_count > 0;
+}
+void signal_handler(int sig)
+{
+    if(sig == SIGINT || sig == SIGTERM || sig == SIGQUIT || sig == SIGKILL) {
+        s_spnet_loop = false;
+        int result = pthread_cond_signal(&s_frame_cond);
+        LOG_DEBUG("pthread_cond_signal result: %d", result);
+    }
+}
 int main(int argc, char **argv)
 {	
+    signal(SIGINT, signal_handler);
+    signal(SIGTERM, signal_handler);
+    signal(SIGQUIT, signal_handler);
+    signal(SIGKILL, signal_handler);
     if(argc != 3) {
         printf("Usage: %s test.265 test.aac\n", argv[0]);
         return 0;
@@ -617,35 +617,20 @@ int main(int argc, char **argv)
 	//session->AddSource(xop::channel_1, xop::AACSource::CreateNew(44100,2));
 	session->AddSource(xop::channel_1, xop::AACSource::CreateNew()); //use default freq. and channels
 	// session->startMulticast(); /* 开启组播(ip,端口随机生成), 默认使用 RTP_OVER_UDP, RTP_OVER_RTSP */
-
-	session->AddNotifyConnectedCallback([] (xop::MediaSessionId sessionId, std::string peer_ip, uint16_t peer_port){
-		printf("RTSP client connect, ip=%s, port=%hu \n", peer_ip.c_str(), peer_port);
-	});
+    s_spnet_loop = false;
+	session->AddNotifyConnectedCallback(connect_callback);
    
-	session->AddNotifyDisconnectedCallback([](xop::MediaSessionId sessionId, std::string peer_ip, uint16_t peer_port) {
-		printf("RTSP client disconnect, ip=%s, port=%hu \n", peer_ip.c_str(), peer_port);
-	});
+	session->AddNotifyDisconnectedCallback(disconnect_callback);
 
 	std::cout << "URL: " << rtsp_url << std::endl;
         
 	xop::MediaSessionId session_id = server->AddSession(session); 
-	//server->removeMeidaSession(session_id); /* 取消会话, 接口线程安全 */
          
-	s_spnet_loop = true;
-	//std::thread thread(SendFrameThread, server.get(), session_id, std::ref(clients));
 	std::thread thread(SendFrameThread, server.get(), session_id, &h265_file, &aac_file);
 	thread.detach();
 
-	/*while(1) {
-		xop::Timer::Sleep(100);
-	}*/
-	getchar();
-
-	s_spnet_loop = false;
     pthread_mutex_lock(&s_main_lock);
     pthread_cond_wait(&s_frame_cond, &s_main_lock);
-    pthread_mutex_unlock(&s_main_lock);
-
     pthread_cond_destroy(&s_frame_cond);
     pthread_mutex_destroy(&s_main_lock);
 
