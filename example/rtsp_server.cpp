@@ -10,6 +10,7 @@
 #include "h265_stream.h"
 #include "log.hpp"
 #include <csignal>
+#include "sample_comm.h"
 
 #define LOG_LEVEL LOG_LEVEL_DEBUG
 

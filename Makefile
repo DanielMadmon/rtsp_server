@@ -12,17 +12,20 @@ CROSS_COMPILE = arm-rockchip830-linux-uclibcgnueabihf-
 #CROSS_COMPILE = /opt/ivot/arm-ca9-linux-gnueabihf-6.5/bin/arm-ca9-linux-gnueabihf-
 CXX = $(CROSS_COMPILE)g++
 
-CXXFLAGS = -I./src
+CXXFLAGS =  -I./src
 CXXFLAGS += -I./src/3rdpart
 CXXFLAGS += -I./src/bsalgo
 CXXFLAGS += -I./src/net
 CXXFLAGS += -I./src/xop
-#RKLIBS cxxflags
-CXXFLAGS += -I$(RKLIBS_INCLUDE)
 
 #Rockchip libs
 RKLIBS_ROOT = ./rk_libs
-RKLIBS_INCLUDE = $(RKLIBS_ROOT)/include
+RKLIBS_INCLUDE := $(shell find $(SRC_DIRS) -type d)
+INC_FLAGS := $(addprefix -I,$(RKLIBS_INCLUDE))
+
+#RKLIBS cxxflags
+CXXFLAGS += -I$(INC_FLAGS)
+
 RKLIBS_LIB = $(RKLIBS_ROOT)/uclibc
 LDLIBS += -L$(RKLIBS_LIB) -lrockiva -lsample_comm -lrockit -lrockchip_mpp -lrkaiq -lrga
 
