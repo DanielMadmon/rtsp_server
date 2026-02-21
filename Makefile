@@ -4,7 +4,7 @@ TARGET2 = rtsp_h264_file
 TARGET3 = rtsp_h265_file
 TARGET4 = rtsp_aac_file
 
-CROSS_COMPILE =
+CROSS_COMPILE = arm-rockchip830-linux-uclibcgnueabihf-
 #CROSS_COMPILE = /opt/ivot/arm-ca9-linux-gnueabihf-6.5/bin/arm-ca9-linux-gnueabihf-
 CXX = $(CROSS_COMPILE)g++
 
