@@ -4,6 +4,10 @@ TARGET2 = rtsp_h264_file
 TARGET3 = rtsp_h265_file
 TARGET4 = rtsp_aac_file
 
+BUILD_DIR = ./build
+LIB_DIR = $(BUILD_DIR)/bin
+OBJ_DIR = $(BUILD_DIR)/objs
+
 CROSS_COMPILE = arm-rockchip830-linux-uclibcgnueabihf-
 #CROSS_COMPILE = /opt/ivot/arm-ca9-linux-gnueabihf-6.5/bin/arm-ca9-linux-gnueabihf-
 CXX = $(CROSS_COMPILE)g++
@@ -13,67 +17,74 @@ CXXFLAGS += -I./src/3rdpart
 CXXFLAGS += -I./src/bsalgo
 CXXFLAGS += -I./src/net
 CXXFLAGS += -I./src/xop
-#CXXFLAGS+= -O0 -g -fPIC -pthread -fmessage-length=0 -std=c++14
+#RKLIBS cxxflags
+CXXFLAGS += -I$(RKLIBS_INCLUDE)
+
+#Rockchip libs
+RKLIBS_ROOT = ./rk_libs
+RKLIBS_INCLUDE = $(RKLIBS_ROOT)/include
+RKLIBS_LIB = $(RKLIBS_ROOT)/uclibc
+LDLIBS += -L$(RKLIBS_LIB) -lrockiva -lsample_comm -lrockit -lrockchip_mpp -lrkaiq -lrga
+
 CXXFLAGS += -O3 -g -fPIC -pthread -fmessage-length=0 -std=c++14
 LDFLAGS = -ldl -lm -lrt -lpthread
-OBJDIR = ./objs
 
-$(shell mkdir -p $(OBJDIR))
+$(shell mkdir -p $(LIB_DIR) $(OBJ_DIR))
 
-$(OBJDIR)/%.o: ./src/bsalgo/%.cpp
+$(OBJ_DIR)/%.o: ./src/bsalgo/%.cpp
 	$(CXX) -c $(CXXFLAGS) $< -o $@
 
-$(OBJDIR)/%.o: ./src/net/%.cpp
+$(OBJ_DIR)/%.o: ./src/net/%.cpp
 	$(CXX) -c $(CXXFLAGS) $< -o $@
-	
-$(OBJDIR)/%.o: ./src/xop/%.cpp
+
+$(OBJ_DIR)/%.o: ./src/xop/%.cpp
 	$(CXX) -c $(CXXFLAGS) $< -o $@
-	
-$(OBJDIR)/%.o: ./example/%.cpp
-	$(CXX) -c $(CXXFLAGS) $< -o $@	
 
-CXXFILES0	= $(notdir $(wildcard ./src/net/*.cpp))
-CXXOBJS0	= $(patsubst %.cpp, $(OBJDIR)/%.o, $(CXXFILES0))
+$(OBJ_DIR)/%.o: ./example/%.cpp
+	$(CXX) -c $(CXXFLAGS) $< -o $@
 
-CXXFILES1	= $(notdir $(wildcard ./src/xop/*.cpp))
-CXXOBJS1	= $(patsubst %.cpp, $(OBJDIR)/%.o, $(CXXFILES1))
+CXXFILES0   = $(notdir $(wildcard ./src/net/*.cpp))
+CXXOBJS0    = $(patsubst %.cpp, $(OBJ_DIR)/%.o, $(CXXFILES0))
 
-CXXFILES2	= $(notdir $(wildcard ./src/bsalgo/*.cpp))
-CXXOBJS2	= $(patsubst %.cpp, $(OBJDIR)/%.o, $(CXXFILES2))
+CXXFILES1   = $(notdir $(wildcard ./src/xop/*.cpp))
+CXXOBJS1    = $(patsubst %.cpp, $(OBJ_DIR)/%.o, $(CXXFILES1))
 
-CXXFILES3	= $(notdir $(wildcard ./example/rtsp_server.cpp))
-CXXOBJS3	= $(patsubst %.cpp, $(OBJDIR)/%.o, $(CXXFILES3))
+CXXFILES2   = $(notdir $(wildcard ./src/bsalgo/*.cpp))
+CXXOBJS2    = $(patsubst %.cpp, $(OBJ_DIR)/%.o, $(CXXFILES2))
 
-CXXFILES4	= $(notdir $(wildcard ./example/rtsp_pusher.cpp))
-CXXOBJS4	= $(patsubst %.cpp, $(OBJDIR)/%.o, $(CXXFILES4))
+CXXFILES3   = $(notdir $(wildcard ./example/rtsp_server.cpp))
+CXXOBJS3    = $(patsubst %.cpp, $(OBJ_DIR)/%.o, $(CXXFILES3))
 
-CXXFILES5	= $(notdir $(wildcard ./example/rtsp_h264_file.cpp))
-CXXOBJS5	= $(patsubst %.cpp, $(OBJDIR)/%.o, $(CXXFILES5))
+CXXFILES4   = $(notdir $(wildcard ./example/rtsp_pusher.cpp))
+CXXOBJS4    = $(patsubst %.cpp, $(OBJ_DIR)/%.o, $(CXXFILES4))
 
-CXXFILES6	= $(notdir $(wildcard ./example/rtsp_h265_file.cpp))
-CXXOBJS6	= $(patsubst %.cpp, $(OBJDIR)/%.o, $(CXXFILES6))
+CXXFILES5   = $(notdir $(wildcard ./example/rtsp_h264_file.cpp))
+CXXOBJS5    = $(patsubst %.cpp, $(OBJ_DIR)/%.o, $(CXXFILES5))
 
-CXXFILES7	= $(notdir $(wildcard ./example/rtsp_aac_file.cpp))
-CXXOBJS7	= $(patsubst %.cpp, $(OBJDIR)/%.o, $(CXXFILES7))
+CXXFILES6   = $(notdir $(wildcard ./example/rtsp_h265_file.cpp))
+CXXOBJS6    = $(patsubst %.cpp, $(OBJ_DIR)/%.o, $(CXXFILES6))
 
-$(TARGET0): $(CXXOBJS0) $(CXXOBJS1) $(CXXOBJS2) $(CXXOBJS3)
-	$(CXX) $^ -o $@ $(LDFLAGS)
+CXXFILES7   = $(notdir $(wildcard ./example/rtsp_aac_file.cpp))
+CXXOBJS7    = $(patsubst %.cpp, $(OBJ_DIR)/%.o, $(CXXFILES7))
 
-$(TARGET1): $(CXXOBJS0) $(CXXOBJS1) $(CXXOBJS2) $(CXXOBJS4)
-	$(CXX) $^ -o $@ $(LDFLAGS)
+$(LIB_DIR)/$(TARGET0): $(CXXOBJS0) $(CXXOBJS1) $(CXXOBJS2) $(CXXOBJS3)
+	$(CXX) $^ -o $@ $(LDFLAGS) $(LDLIBS)
 
-$(TARGET2): $(CXXOBJS0) $(CXXOBJS1) $(CXXOBJS2) $(CXXOBJS5)
-	$(CXX) $^ -o $@ $(LDFLAGS)
+$(LIB_DIR)/$(TARGET1): $(CXXOBJS0) $(CXXOBJS1) $(CXXOBJS2) $(CXXOBJS4)
+	$(CXX) $^ -o $@ $(LDFLAGS) $(LDLIBS)
 
-$(TARGET3): $(CXXOBJS0) $(CXXOBJS1) $(CXXOBJS2) $(CXXOBJS6)
-	$(CXX) $^ -o $@ $(LDFLAGS)
+$(LIB_DIR)/$(TARGET2): $(CXXOBJS0) $(CXXOBJS1) $(CXXOBJS2) $(CXXOBJS5)
+	$(CXX) $^ -o $@ $(LDFLAGS) $(LDLIBS)
 
-$(TARGET4): $(CXXOBJS0) $(CXXOBJS1) $(CXXOBJS2) $(CXXOBJS7)
-	$(CXX) $^ -o $@ $(LDFLAGS)		
-	
-all: $(TARGET0) $(TARGET1) $(TARGET2) $(TARGET3) $(TARGET4)
-		
+$(LIB_DIR)/$(TARGET3): $(CXXOBJS0) $(CXXOBJS1) $(CXXOBJS2) $(CXXOBJS6)
+	$(CXX) $^ -o $@ $(LDFLAGS) $(LDLIBS)
+
+$(LIB_DIR)/$(TARGET4): $(CXXOBJS0) $(CXXOBJS1) $(CXXOBJS2) $(CXXOBJS7)
+	$(CXX) $^ -o $@ $(LDFLAGS) $(LDLIBS)
+
+all: $(LIB_DIR)/$(TARGET0) $(LIB_DIR)/$(TARGET1) $(LIB_DIR)/$(TARGET2) $(LIB_DIR)/$(TARGET3) $(LIB_DIR)/$(TARGET4)
+
 clean:
-	rm -rf $(OBJDIR) $(TARGET0) $(TARGET1) $(TARGET2) $(TARGET3) $(TARGET4)
-	
+	rm -rf $(BUILD_DIR)
+
 .PHONY: all clean
