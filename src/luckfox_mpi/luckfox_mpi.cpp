@@ -47,6 +47,7 @@ bool luckfox_mpi::init_vi()
                 result:%d, line:%s, file:%s",result,__LINE__,__FILE__);
         return false;
     }
+    //TODO:rk_aiq_uapi2_sysctl_init
     return result;
 }
 

@@ -12,8 +12,7 @@
 #include <csignal>
 #include "sample_comm.h"
 #include "luckfox_mpi.hpp"
-
-#define LOG_LEVEL LOG_LEVEL_DEBUG
+#include "generic_log/generic_log.h"
 
 static volatile bool    s_spnet_loop;
 static volatile int32_t s_client_count;
@@ -151,7 +150,7 @@ int H265File::ReadFrame(char* in_buf, int in_buf_size, bool* end)
         if (nal_unit == 0x20 || nal_unit == 0x21 || nal_unit == 0x22 || nal_unit == 0x27 || nal_unit == 0x28
             ||
             ((nal_unit == 0x0 || nal_unit == 0x1 || nal_unit == 0x8 || nal_unit == 0x9 || nal_unit == 0x13 || nal_unit == 0x14 || nal_unit == 0x15) && (slice_type >= 0 && slice_type <= 2))) {
-            LOG_DEBUG("nal_unit: %d, slice_type: %d", nal_unit, slice_type);
+            LOGD("nal_unit: %d, slice_type: %d", nal_unit, slice_type);
             is_find_start = true;
             i += 4;
             break;
@@ -186,7 +185,7 @@ int H265File::ReadFrame(char* in_buf, int in_buf_size, bool* end)
         if (nal_unit == 0x20 || nal_unit == 0x21 || nal_unit == 0x22 || nal_unit == 0x27 || nal_unit == 0x28
             ||
             ((nal_unit == 0x0 || nal_unit == 0x1 || nal_unit == 0x8 || nal_unit == 0x9 || nal_unit == 0x13 || nal_unit == 0x14 || nal_unit == 0x15) && (slice_type >= 0 && slice_type <= 2))) {
-            LOG_DEBUG("nal_unit: %d, slice_type: %d", nal_unit, slice_type);
+            LOGD("nal_unit: %d, slice_type: %d", nal_unit, slice_type);
             is_find_end = true;
             break;
         }
@@ -457,7 +456,7 @@ void signal_handler(int sig)
     if(sig == SIGINT || sig == SIGTERM || sig == SIGQUIT || sig == SIGKILL) {
         s_spnet_loop = false;
         int result = pthread_cond_signal(&s_frame_cond);
-        LOG_DEBUG("pthread_cond_signal result: %d", result);
+        LOGD("pthread_cond_signal result: %d", result);
     }
 }
 int main(int argc, char **argv)
