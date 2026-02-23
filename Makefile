@@ -17,10 +17,11 @@ CXXFLAGS += -I./src/3rdpart
 CXXFLAGS += -I./src/bsalgo
 CXXFLAGS += -I./src/net
 CXXFLAGS += -I./src/xop
-
+CXXFLAGS += -I./src/luckfox_mpi
+CXXFLAGS += -I./src/generic_log
 #Rockchip libs
 RKLIBS_ROOT = ./rk_libs
-RKLIBS_INCLUDE := $(shell find $(SRC_DIRS) -type d)
+RKLIBS_INCLUDE := $(shell find $(RKLIBS_ROOT) -type d)
 INC_FLAGS := $(addprefix -I,$(RKLIBS_INCLUDE))
 
 #RKLIBS cxxflags
@@ -29,7 +30,8 @@ CXXFLAGS += -I$(INC_FLAGS)
 RKLIBS_LIB = $(RKLIBS_ROOT)/uclibc
 LDLIBS += -L$(RKLIBS_LIB) -lrockiva -lsample_comm -lrockit -lrockchip_mpp -lrkaiq -lrga
 
-CXXFLAGS += -O3 -g -fPIC -pthread -fmessage-length=0 -std=c++14
+CXXFLAGS += -O3 -g -fPIC -pthread -fmessage-length=0 -std=c++14 
+CXXFLAGS += -DDYN_LOG
 LDFLAGS = -ldl -lm -lrt -lpthread
 
 $(shell mkdir -p $(LIB_DIR) $(OBJ_DIR))
@@ -44,6 +46,9 @@ $(OBJ_DIR)/%.o: ./src/xop/%.cpp
 	$(CXX) -c $(CXXFLAGS) $< -o $@
 
 $(OBJ_DIR)/%.o: ./example/%.cpp
+	$(CXX) -c $(CXXFLAGS) $< -o $@
+
+$(OBJ_DIR)/%.o: ./src/luckfox_mpi/%.cpp
 	$(CXX) -c $(CXXFLAGS) $< -o $@
 
 CXXFILES0   = $(notdir $(wildcard ./src/net/*.cpp))
@@ -70,22 +75,28 @@ CXXOBJS6    = $(patsubst %.cpp, $(OBJ_DIR)/%.o, $(CXXFILES6))
 CXXFILES7   = $(notdir $(wildcard ./example/rtsp_aac_file.cpp))
 CXXOBJS7    = $(patsubst %.cpp, $(OBJ_DIR)/%.o, $(CXXFILES7))
 
-$(LIB_DIR)/$(TARGET0): $(CXXOBJS0) $(CXXOBJS1) $(CXXOBJS2) $(CXXOBJS3)
+CXXFILES8   = $(notdir $(wildcard ./src/luckfox_mpi/*.cpp))
+CXXOBJS8    = $(patsubst %.cpp, $(OBJ_DIR)/%.o, $(CXXFILES8))
+
+$(LIB_DIR)/$(TARGET0): $(CXXOBJS0) $(CXXOBJS1) $(CXXOBJS2) $(CXXOBJS3) $(CXXOBJS8)
 	$(CXX) $^ -o $@ $(LDFLAGS) $(LDLIBS)
 
-$(LIB_DIR)/$(TARGET1): $(CXXOBJS0) $(CXXOBJS1) $(CXXOBJS2) $(CXXOBJS4)
+$(LIB_DIR)/$(TARGET1): $(CXXOBJS0) $(CXXOBJS1) $(CXXOBJS2) $(CXXOBJS4) $(CXXOBJS8)
 	$(CXX) $^ -o $@ $(LDFLAGS) $(LDLIBS)
 
-$(LIB_DIR)/$(TARGET2): $(CXXOBJS0) $(CXXOBJS1) $(CXXOBJS2) $(CXXOBJS5)
+$(LIB_DIR)/$(TARGET2): $(CXXOBJS0) $(CXXOBJS1) $(CXXOBJS2) $(CXXOBJS5) $(CXXOBJS8)
 	$(CXX) $^ -o $@ $(LDFLAGS) $(LDLIBS)
 
-$(LIB_DIR)/$(TARGET3): $(CXXOBJS0) $(CXXOBJS1) $(CXXOBJS2) $(CXXOBJS6)
+$(LIB_DIR)/$(TARGET3): $(CXXOBJS0) $(CXXOBJS1) $(CXXOBJS2) $(CXXOBJS6) $(CXXOBJS8)
 	$(CXX) $^ -o $@ $(LDFLAGS) $(LDLIBS)
 
-$(LIB_DIR)/$(TARGET4): $(CXXOBJS0) $(CXXOBJS1) $(CXXOBJS2) $(CXXOBJS7)
+$(LIB_DIR)/$(TARGET4): $(CXXOBJS0) $(CXXOBJS1) $(CXXOBJS2) $(CXXOBJS7) $(CXXOBJS8)
 	$(CXX) $^ -o $@ $(LDFLAGS) $(LDLIBS)
 
-all: $(LIB_DIR)/$(TARGET0) $(LIB_DIR)/$(TARGET1) $(LIB_DIR)/$(TARGET2) $(LIB_DIR)/$(TARGET3) $(LIB_DIR)/$(TARGET4)
+all: $(LIB_DIR)/$(TARGET0) $(LIB_DIR)/$(TARGET1) \
+	 $(LIB_DIR)/$(TARGET2) $(LIB_DIR)/$(TARGET3) \
+	 $(LIB_DIR)/$(TARGET4)
+	 @echo "rtsp_server build successful"
 
 clean:
 	rm -rf $(BUILD_DIR)

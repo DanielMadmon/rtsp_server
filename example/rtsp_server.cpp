@@ -11,6 +11,7 @@
 #include "log.hpp"
 #include <csignal>
 #include "sample_comm.h"
+#include "luckfox_mpi.hpp"
 
 #define LOG_LEVEL LOG_LEVEL_DEBUG
 
@@ -18,6 +19,10 @@ static volatile bool    s_spnet_loop;
 static volatile int32_t s_client_count;
 static pthread_mutex_t  s_main_lock;
 static pthread_cond_t   s_frame_cond;
+static const char* aiq_file_path = "/oem/usr/share/iqfiles";
+static const uint32_t sc3336_width = 2304;
+static const uint32_t sc3336_height= 1296;
+static const rk_aiq_working_mode_t sc3336_hdr_mode = RK_AIQ_WORKING_MODE_ISP_HDR2;
 
 class H265File
 {
@@ -131,47 +136,6 @@ int H265File::ReadFrame(char* in_buf, int in_buf_size, bool* end)
         bs_read_ue(bs)
         slice_type  = bs_read_ue(bs)
         */
-
-        //debug
-        /*printf("ReadFrame1: %02x%02x%02x%02x %02x%02x%02x%02x%02x%02x%02x%02x\n",
-                    *((unsigned char*)(m_buf+0)),
-                    *((unsigned char*)(m_buf+1)),
-                    *((unsigned char*)(m_buf+2)),
-                    *((unsigned char*)(m_buf+3)),
-                    *((unsigned char*)(m_buf+4)),
-                    *((unsigned char*)(m_buf+5)),
-                    *((unsigned char*)(m_buf+6)),
-                    *((unsigned char*)(m_buf+7)),
-                    *((unsigned char*)(m_buf+8)),
-                    *((unsigned char*)(m_buf+9)),
-                    *((unsigned char*)(m_buf+10)),
-                    *((unsigned char*)(m_buf+11)));
-
-        if( *((unsigned char*)(m_buf+0)) == 0x00
-                    &&
-            *((unsigned char*)(m_buf+1)) == 0x00
-                    &&
-            *((unsigned char*)(m_buf+2)) == 0x00
-                    &&
-            *((unsigned char*)(m_buf+3)) == 0x01
-                    &&
-            *((unsigned char*)(m_buf+4)) == 0x10
-                    &&
-            *((unsigned char*)(m_buf+5)) == 0x01
-                    &&
-            *((unsigned char*)(m_buf+6)) == 0xff
-                    &&
-            *((unsigned char*)(m_buf+7)) == 0x22
-                    &&
-            *((unsigned char*)(m_buf+8)) == 0x2d
-                    &&
-            *((unsigned char*)(m_buf+9)) == 0x49
-                    &&
-            *((unsigned char*)(m_buf+10)) == 0xfd
-                    &&
-            *((unsigned char*)(m_buf+11)) == 0xc2)
-                printf("found1\n\n");*/
-
         nal_unit = (m_buf[i+start_code] & 0x7E) >> 1;
 
         bs_init(m_buf[i+start_code+2]);
@@ -205,46 +169,6 @@ int H265File::ReadFrame(char* in_buf, int in_buf_size, bool* end)
         else   {
             continue;
         }
-
-        //debug
-        /*printf("ReadFrame2: %02x%02x%02x%02x %02x%02x%02x%02x%02x%02x%02x%02x\n",
-                *((unsigned char*)(i+m_buf+0)),
-                *((unsigned char*)(i+m_buf+1)),
-                *((unsigned char*)(i+m_buf+2)),
-                *((unsigned char*)(i+m_buf+3)),
-                *((unsigned char*)(i+m_buf+4)),
-                *((unsigned char*)(i+m_buf+5)),
-                *((unsigned char*)(i+m_buf+6)),
-                *((unsigned char*)(i+m_buf+7)),
-                *((unsigned char*)(i+m_buf+8)),
-                *((unsigned char*)(i+m_buf+9)),
-                *((unsigned char*)(i+m_buf+10)),
-                *((unsigned char*)(i+m_buf+11)));
-
-        if( *((unsigned char*)(i+m_buf+0)) == 0x00
-                    &&
-            *((unsigned char*)(i+m_buf+1)) == 0x00
-                    &&
-            *((unsigned char*)(i+m_buf+2)) == 0x00
-                    &&
-            *((unsigned char*)(i+m_buf+3)) == 0x01
-                    &&
-            *((unsigned char*)(i+m_buf+4)) == 0x00
-                    &&
-            *((unsigned char*)(i+m_buf+5)) == 0x01
-                    &&
-            *((unsigned char*)(i+m_buf+6)) == 0xfe
-                    &&
-            *((unsigned char*)(i+m_buf+7)) == 0xe2
-                    &&
-            *((unsigned char*)(i+m_buf+8)) == 0x2d
-                    &&
-            *((unsigned char*)(i+m_buf+9)) == 0x57
-                    &&
-            *((unsigned char*)(i+m_buf+10)) == 0xf7
-                    &&
-            *((unsigned char*)(i+m_buf+11)) == 0x08)
-            printf("found2\n\n");*/
 
         nal_unit = (m_buf[i+start_code] & 0x7E) >> 1;
 
@@ -380,46 +304,6 @@ int AACFile::ReadFrame(char* in_buf, int in_buf_size, bool* end)
             continue;
         }
     }
-
-    //debug
-    /*printf("ReadFrame1: %02x%02x%02x%02x %02x%02x%02x%02x%02x%02x%02x%02x\n",
-                *((unsigned char*)(m_buf+0)),
-                *((unsigned char*)(m_buf+1)),
-                *((unsigned char*)(m_buf+2)),
-                *((unsigned char*)(m_buf+3)),
-                *((unsigned char*)(m_buf+4)),
-                *((unsigned char*)(m_buf+5)),
-                *((unsigned char*)(m_buf+6)),
-                *((unsigned char*)(m_buf+7)),
-                *((unsigned char*)(m_buf+8)),
-                *((unsigned char*)(m_buf+9)),
-                *((unsigned char*)(m_buf+10)),
-                *((unsigned char*)(m_buf+11)));*/
-
-    /*if( *((unsigned char*)(m_buf+0)) == 0xff
-                    &&
-            *((unsigned char*)(m_buf+1)) == 0xf1
-                    &&
-            *((unsigned char*)(m_buf+2)) == 0x50
-                    &&
-            *((unsigned char*)(m_buf+3)) == 0x80
-                    &&
-            *((unsigned char*)(m_buf+4)) == 0xbb
-                    &&
-            *((unsigned char*)(m_buf+5)) == 0xff
-                    &&
-            *((unsigned char*)(m_buf+6)) == 0xfc
-                    &&
-            *((unsigned char*)(m_buf+7)) == 0x21
-                    &&
-            *((unsigned char*)(m_buf+8)) == 0x4c
-                    &&
-            *((unsigned char*)(m_buf+9)) == 0x6c
-                    &&
-            *((unsigned char*)(m_buf+10)) == 0xf8
-                    &&
-            *((unsigned char*)(m_buf+11)) == 0x17)
-            printf("found1\n\n");*/
 
     uint32_t frame_length = (((unsigned int)m_buf[3] & 0x3) << 11)
                             |
@@ -582,6 +466,8 @@ int main(int argc, char **argv)
     signal(SIGTERM, signal_handler);
     signal(SIGQUIT, signal_handler);
     signal(SIGKILL, signal_handler);
+    std::system("RkLunch-stop.sh");
+    luckfox_mpi luckfox_mpi_handle();
     if(argc != 3) {
         printf("Usage: %s test.265 test.aac\n", argv[0]);
         return 0;
