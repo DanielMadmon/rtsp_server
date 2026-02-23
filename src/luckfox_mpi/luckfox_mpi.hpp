@@ -12,9 +12,12 @@
 *   or by binding.
 *   usually the for last module in the chain the channel will be accessed 
 *   manually. 
+*   sc3336 pixel format : RK_FMT_RGB_BAYER_SBGGR_10BPP
+*   flow : vin->vpss(OSD overlay & format conversion)->venc->rtsp in.
 */
 struct _luckfox_mpi_ctx;
 struct _luckfox_mpi_vi_ctx;
+struct _luckfox_mpi_vpss_ctx;
 
 struct _luckfox_mpi_vi_ctx{
     RK_BOOL bWrapIfEnable;
@@ -38,12 +41,22 @@ struct _luckfox_mpi_vi_ctx{
     rk_aiq_static_info_t aiq_static_info;
 };
 
+struct _luckfox_mpi_vpss_ctx{
+	VPSS_GRP s32GrpId;
+	VPSS_CHN s32ChnId;
+	VPSS_GRP_ATTR_S stGrpVpssAttr;
+	VIDEO_PROC_DEV_TYPE_E enVProcDevType;
+	VPSS_CHN_ATTR_S stVpssChnAttr;
+	MB_POOL pool;
+	VIDEO_FRAME_INFO_S stChnFrameInfos;
+};
 
 struct _luckfox_mpi_ctx{
     const char* rknn_path;
     _luckfox_mpi_vi_ctx video_in;
+    _luckfox_mpi_vpss_ctx vpss;
 	SAMPLE_VENC_CTX_S video_encoder;
-	SAMPLE_RGN_CTX_S rgn; //for OSD image modifucation
+	SAMPLE_RGN_CTX_S rgn; //for OSD image modification
 };
 
 
@@ -53,6 +66,7 @@ class luckfox_mpi
 public:
     luckfox_mpi(const char* rknn_path="/oem/usr/share/iqfiles");
     bool init_video_in(rk_aiq_working_mode_t mode,int32_t fps,uint32_t width,uint32_t height);
+    bool init_vpss();
     SAMPLE_VENC_CTX_S * init_video_encoder(pthread_t get_frame_cb_thread);
     ~luckfox_mpi();
 

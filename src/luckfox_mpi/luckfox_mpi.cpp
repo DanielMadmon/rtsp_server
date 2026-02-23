@@ -16,6 +16,11 @@ bool luckfox_mpi::init_video_in(rk_aiq_working_mode_t mode, int32_t fps,uint32_t
     this->mpi_ctx.video_in.hdr_mode = mode;
     this->mpi_ctx.video_in.vi_fps   = fps;
     bool result = this->init_vi();
+    if(result){
+        LOGI("init_video_in done.");
+    }else{
+        LOGE("init video failed");
+    }
     return result;
 }
 
@@ -39,6 +44,7 @@ bool luckfox_mpi::init_vi()
                 result:%d, line:%s, file:%s",result,__LINE__,__FILE__);
         return false;
     }
+    LOGD("sensor enumarated by ID.");
     result = 
         rk_aiq_uapi2_sysctl_preInit_devBufCnt(this->mpi_ctx.video_in.aiq_static_info.sensor_info.sensor_name,
                                              "rkraw_rx",this->vi_buf_count);
@@ -47,12 +53,37 @@ bool luckfox_mpi::init_vi()
                 result:%d, line:%s, file:%s",result,__LINE__,__FILE__);
         return false;
     }
-    //TODO:rk_aiq_uapi2_sysctl_init
-    return result;
+    LOGD("device buffer count init");
+    this->mpi_ctx.video_in.aiq_ctx = 
+        rk_aiq_uapi2_sysctl_init(this->mpi_ctx.video_in.aiq_static_info.sensor_info.sensor_name,
+                                this->mpi_ctx.rknn_path,
+                                NULL,NULL);
+    if(!this->mpi_ctx.video_in.aiq_ctx){
+        LOGE("failed to initialize sysctl.\
+             line: %s,file:%s",__LINE__,__FILE__);
+        return false;
+    }
+    LOGD("init sysctl done.");
+    LOGD("sensor name:%s",this->mpi_ctx.video_in.aiq_static_info.sensor_info.sensor_name);
+    LOGD("width:%d",mpi_ctx.video_in.aiq_static_info.sensor_info.support_fmt->width);
+    LOGD("height:%d",mpi_ctx.video_in.aiq_static_info.sensor_info.support_fmt->height);
+    LOGD("fps:%d",mpi_ctx.video_in.aiq_static_info.sensor_info.support_fmt->fps);
+    result = RK_MPI_SYS_Init();
+    if(result != RK_SUCCESS){
+        LOGE("failed to initialize mpi_sys.\
+             line: %s,file:%s",__LINE__,__FILE__);
+    }
+    LOGD("RK_MPI_SYS_Init done.");
+    return true;
+}
+
+bool init_vpss(){
+    
 }
 
 RK_S32 luckfox_mpi::init_venc()
 {
+
     return -1;
 }
 

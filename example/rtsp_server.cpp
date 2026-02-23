@@ -12,7 +12,7 @@
 #include <csignal>
 #include "sample_comm.h"
 #include "luckfox_mpi.hpp"
-#include "generic_log/generic_log.h"
+#include "generic_log.h"
 
 static volatile bool    s_spnet_loop;
 static volatile int32_t s_client_count;
@@ -461,12 +461,15 @@ void signal_handler(int sig)
 }
 int main(int argc, char **argv)
 {	
+    log_level_set(LOG_DBG);
     signal(SIGINT, signal_handler);
     signal(SIGTERM, signal_handler);
     signal(SIGQUIT, signal_handler);
     signal(SIGKILL, signal_handler);
     std::system("RkLunch-stop.sh");
-    luckfox_mpi luckfox_mpi_handle();
+    luckfox_mpi luckfox_mpi_handle(aiq_file_path);
+    luckfox_mpi_handle.init_video_in(sc3336_hdr_mode,
+                                    30,sc3336_width,sc3336_height);
     if(argc != 3) {
         printf("Usage: %s test.265 test.aac\n", argv[0]);
         return 0;
