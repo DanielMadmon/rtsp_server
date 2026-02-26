@@ -30,7 +30,7 @@ CXXFLAGS += -I$(INC_FLAGS)
 RKLIBS_LIB = $(RKLIBS_ROOT)/uclibc
 LDLIBS += -L$(RKLIBS_LIB) -lrockiva -lsample_comm -lrockit -lrockchip_mpp -lrkaiq -lrga
 
-CXXFLAGS += -O3 -g -fPIC -pthread -fmessage-length=0 -std=c++14 
+CXXFLAGS += -O -g -fPIC -pthread -fmessage-length=0 -std=c++14 -Wall -Werror=format
 CXXFLAGS += -DDYN_LOG
 LDFLAGS = -ldl -lm -lrt -lpthread
 

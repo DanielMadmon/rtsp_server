@@ -21,7 +21,7 @@ static pthread_cond_t   s_frame_cond;
 static const char* aiq_file_path = "/oem/usr/share/iqfiles";
 static const uint32_t sc3336_width = 2304;
 static const uint32_t sc3336_height= 1296;
-static const rk_aiq_working_mode_t sc3336_hdr_mode = RK_AIQ_WORKING_MODE_ISP_HDR2;
+static const rk_aiq_working_mode_t sc3336_hdr_mode = RK_AIQ_WORKING_MODE_NORMAL;
 
 class H265File
 {
@@ -466,7 +466,7 @@ int main(int argc, char **argv)
     signal(SIGTERM, signal_handler);
     signal(SIGQUIT, signal_handler);
     signal(SIGKILL, signal_handler);
-    std::system("RkLunch-stop.sh");
+    std::system("RkLunch-stop.sh"); 
     luckfox_mpi luckfox_mpi_handle(aiq_file_path);
     luckfox_mpi_handle.init_video_in(sc3336_hdr_mode,
                                     30,sc3336_width,sc3336_height);

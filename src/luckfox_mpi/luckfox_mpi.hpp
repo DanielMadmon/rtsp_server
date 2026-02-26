@@ -19,7 +19,37 @@ struct _luckfox_mpi_ctx;
 struct _luckfox_mpi_vi_ctx;
 struct _luckfox_mpi_vpss_ctx;
 
-struct _luckfox_mpi_vi_ctx{
+
+
+struct _luckfox_mpi_vpss_ctx{
+	VPSS_GRP s32GrpId;
+	VPSS_CHN s32ChnId;
+	VPSS_GRP_ATTR_S stGrpVpssAttr;
+	VIDEO_PROC_DEV_TYPE_E enVProcDevType;
+	VPSS_CHN_ATTR_S stVpssChnAttr;
+	MB_POOL pool;
+	VIDEO_FRAME_INFO_S stChnFrameInfos;
+};
+
+
+
+
+
+class luckfox_mpi
+{
+public:
+    luckfox_mpi(const char* rknn_path="/oem/usr/share/iqfiles");
+    bool init_video_in(rk_aiq_working_mode_t mode,int32_t fps,uint32_t width,uint32_t height);
+    bool init_vpss();
+    SAMPLE_VENC_CTX_S * init_video_encoder(pthread_t get_frame_cb_thread);
+    ~luckfox_mpi();
+
+private:
+    bool init_vi();
+    RK_S32 init_venc();
+    const int32_t vi_buf_count = 4; 
+    int32_t vi_dev_id = 0;
+    struct _luckfox_mpi_vi_ctx{
     RK_BOOL bWrapIfEnable;
 	RK_BOOL bIfOpenEptz;
 	RK_BOOL bIfIspGroupInit;
@@ -39,41 +69,16 @@ struct _luckfox_mpi_vi_ctx{
     RK_U32 vi_fps;
     rk_aiq_sys_ctx_t* aiq_ctx;
     rk_aiq_static_info_t aiq_static_info;
-};
-
-struct _luckfox_mpi_vpss_ctx{
-	VPSS_GRP s32GrpId;
-	VPSS_CHN s32ChnId;
-	VPSS_GRP_ATTR_S stGrpVpssAttr;
-	VIDEO_PROC_DEV_TYPE_E enVProcDevType;
-	VPSS_CHN_ATTR_S stVpssChnAttr;
-	MB_POOL pool;
-	VIDEO_FRAME_INFO_S stChnFrameInfos;
-};
-
-struct _luckfox_mpi_ctx{
+    bool b_vi_channel_en;
+   };    
+   struct _luckfox_mpi_ctx{
     const char* rknn_path;
     _luckfox_mpi_vi_ctx video_in;
     _luckfox_mpi_vpss_ctx vpss;
 	SAMPLE_VENC_CTX_S video_encoder;
 	SAMPLE_RGN_CTX_S rgn; //for OSD image modification
-};
+   };
+   struct _luckfox_mpi_ctx mpi_ctx = {0};
 
-
-
-class luckfox_mpi
-{
-public:
-    luckfox_mpi(const char* rknn_path="/oem/usr/share/iqfiles");
-    bool init_video_in(rk_aiq_working_mode_t mode,int32_t fps,uint32_t width,uint32_t height);
-    bool init_vpss();
-    SAMPLE_VENC_CTX_S * init_video_encoder(pthread_t get_frame_cb_thread);
-    ~luckfox_mpi();
-
-private:
-    bool init_vi();
-    RK_S32 init_venc();
-    struct _luckfox_mpi_ctx mpi_ctx = {0};
-    const int32_t vi_buf_count = 2; 
 };
 
