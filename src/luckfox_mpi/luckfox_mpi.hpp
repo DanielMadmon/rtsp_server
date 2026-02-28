@@ -21,34 +21,29 @@ struct _luckfox_mpi_vpss_ctx;
 struct _luckfox_mpi_venc_ctx;
 
 
-
-
-
-
-
 class luckfox_mpi
 {
 public:
     luckfox_mpi(const char* rknn_path="/oem/usr/share/iqfiles");
     bool init_video_in(rk_aiq_working_mode_t mode,int32_t fps,uint32_t width,uint32_t height);
     bool init_vpss();
-    bool init_video_encoder(RK_CODEC_ID_E codec);
-    bool venc_get_stream(uint8_t* p_data,size_t* stream_len);
+    bool init_video_encoder(RK_CODEC_ID_E codec,uint32_t width,uint32_t height);
+    uint8_t* venc_get_stream(size_t *stream_len);
     bool venc_release_stream();
     bool bind_vin_vpss();
+    bool bind_vin_venc();
     bool bind_vpss_venc();
     ~luckfox_mpi();
 
 private:
     bool init_vi();
-    RK_S32 init_venc();
-    void xcam_fourcc_str(char*buffer,uint32_t fourcc);
 
 
-    const int32_t vi_buf_count = 4; 
+    const int32_t vi_buf_count = 1; 
     int32_t vi_dev_id = 0;
     const uint32_t vpss_max_width = 4096;
     const uint32_t vpss_max_height= 4096;
+    int32_t channel_id = 0;
     struct _luckfox_mpi_vi_ctx{
         RK_BOOL bWrapIfEnable;
         RK_BOOL bIfOpenEptz;
@@ -93,7 +88,9 @@ private:
         _luckfox_mpi_venc_ctx video_encoder;
         SAMPLE_RGN_CTX_S rgn; //for OSD image modification
    };
-   
+    VENC_STREAM_S pstStream = {0};
+    VENC_PACK_S __attribute__((aligned (16))) pstPack;
+    pthread_mutex_t venc_stream_mutex = PTHREAD_MUTEX_INITIALIZER;
     _luckfox_mpi_ctx mpi_ctx = {0};
    
 };

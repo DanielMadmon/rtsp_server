@@ -470,9 +470,16 @@ int main(int argc, char **argv)
     luckfox_mpi luckfox_mpi_handle(aiq_file_path);
     luckfox_mpi_handle.init_video_in(sc3336_hdr_mode,
                                     30,sc3336_width,sc3336_height);
-    luckfox_mpi_handle.init_vpss();
-    luckfox_mpi_handle.bind_vin_vpss();
-    luckfox_mpi_handle.init_video_encoder(RK_VIDEO_ID_HEVC);
+    luckfox_mpi_handle.init_video_encoder(RK_VIDEO_ID_HEVC,sc3336_width,sc3336_height);
+    uint8_t* stream_ptr = NULL;
+    size_t stream_len = 0;
+    stream_ptr = luckfox_mpi_handle.venc_get_stream(&stream_len);
+    LOGI("got stream pointer %p, length:%d",stream_ptr,stream_len);
+    bool res = luckfox_mpi_handle.venc_release_stream();
+    LOGI("Release stream returned:%d",res);
+    //luckfox_mpi_handle.init_vpss();
+    //luckfox_mpi_handle.bind_vin_vpss();
+    
     if(argc != 3) {
         printf("Usage: %s test.265 test.aac\n", argv[0]);
         return 0;
