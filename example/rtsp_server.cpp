@@ -23,408 +23,30 @@ static const uint32_t sc3336_width = 2304;
 static const uint32_t sc3336_height= 1296;
 static const rk_aiq_working_mode_t sc3336_hdr_mode = RK_AIQ_WORKING_MODE_NORMAL;
 
-class H265File
-{
-public:
-    H265File(int buf_size=500000);
-    ~H265File();
-
-    bool Open(const char *path);
-    void Close();
-
-    bool IsOpened() const
-    { return (m_file != NULL); }
-
-    int ReadFrame(char* in_buf, int in_buf_size, bool* end);
-
-private:
-    FILE*       m_file          = NULL;
-    uint8_t*    m_buf           = NULL;
-    int         m_buf_size      = 0;
-    int         m_bytes_used    = 0;
-    int         m_count         = 0;
-};
-
-H265File::H265File(int buf_size)
-: m_buf_size(buf_size)
-{
-    m_buf = new uint8_t[m_buf_size];
-}
-
-H265File::~H265File()
-{
-    delete [] m_buf;
-}
-
-bool H265File::Open(const char *path)
-{
-    m_file = fopen(path, "rb");
-    if(m_file == NULL) {
-        return false;
-    }
-
-    return true;
-}
-
-void H265File::Close()
-{
-    if(m_file) {
-        fclose(m_file);
-        m_file = NULL;
-        m_count = 0;
-        m_bytes_used = 0;
-    }
-}
-
-int H265File::ReadFrame(char* in_buf, int in_buf_size, bool* end)
-{
-    if(m_file == NULL) {
-        return -1;
-    }
-
-    int bytes_read = (int)fread(m_buf, 1, m_buf_size, m_file);
-    if(bytes_read == 0) {
-        fseek(m_file, 0, SEEK_SET);
-        m_count = 0;
-        m_bytes_used = 0;
-        bytes_read = (int)fread(m_buf, 1, m_buf_size, m_file);
-        if(bytes_read == 0)         {
-            this->Close();
-            return -1;
-        }
-    }
-
-    uint8_t     nal_unit;
-    uint32_t    first_slice,no_output,pic_parameter,slice_type;
-    bool is_find_start = false, is_find_end = false;
-    int i = 0, start_code = 3;
-    *end = false;
-
-    for (i=0; i<bytes_read-5; i++) {
-        if(m_buf[i] == 0 && m_buf[i+1] == 0 && m_buf[i+2] == 1) {
-            start_code = 3;
-        }
-        else if(m_buf[i] == 0 && m_buf[i+1] == 0 && m_buf[i+2] == 0 && m_buf[i+3] == 1) {
-            start_code = 4;
-        }
-        else  {
-            continue;
-        }
-
-        /*
-        00 00 00 01 nalu temporal_id
-        0   CODED SLICE TRAIL N
-        1   CODED SLICE TRAIL R
-        0x13 IDR W
-        0x14 IDR N
-        0x20 VPS
-        0x21 SPS
-        0x22 PPS
-        0x27 SEI Prefix
-        0x28 SEI Suffix
-        nal_unit    = (*nalu_pos&0x7E) >> 1
-        temporal_id = *(nalu_pos+1)
-        --------------------------------
-        00 00 00 01 nalu temporal_id (first_slice+no_output+slice_pic_parameter+slice_reserved+slice_type at one byte)
-        0   HEVC_SLICE_B
-        1   HEVC_SLICE_P
-        2   HEVC_SLICE_I
-        *(bs->p)    = *(nalu_pos+2)
-        bs_read_u1(bs)
-        bs_read_u1(bs)
-        bs_read_ue(bs)
-        slice_type  = bs_read_ue(bs)
-        */
-        nal_unit = (m_buf[i+start_code] & 0x7E) >> 1;
-
-        bs_init(m_buf[i+start_code+2]);
-        first_slice     = bs_read_u1();
-        if ( nal_unit >= NAL_UNIT_CODED_SLICE_BLA_W_LP && nal_unit <= NAL_UNIT_RESERVED_IRAP_VCL23 )
-        {
-            no_output = bs_read_u1();
-        }
-        pic_parameter   = bs_read_ue();
-        slice_type      = bs_read_ue();
-
-        /*SLICE_TRAIL_N SLICE_TRAIL_R IDRW IDRN CRA && HEVC_SLICE_B HEVC_SLICE_I*/
-        if (nal_unit == 0x20 || nal_unit == 0x21 || nal_unit == 0x22 || nal_unit == 0x27 || nal_unit == 0x28
-            ||
-            ((nal_unit == 0x0 || nal_unit == 0x1 || nal_unit == 0x8 || nal_unit == 0x9 || nal_unit == 0x13 || nal_unit == 0x14 || nal_unit == 0x15) && (slice_type >= 0 && slice_type <= 2))) {
-            LOGD("nal_unit: %d, slice_type: %d", nal_unit, slice_type);
-            is_find_start = true;
-            i += 4;
-            break;
-        }
-    }
-
-    for (; i<bytes_read-5; i++) {
-        if(m_buf[i] == 0 && m_buf[i+1] == 0 && m_buf[i+2] == 1)
-        {
-            start_code = 3;
-        }
-        else if(m_buf[i] == 0 && m_buf[i+1] == 0 && m_buf[i+2] == 0 && m_buf[i+3] == 1) {
-            start_code = 4;
-        }
-        else   {
-            continue;
-        }
-
-        nal_unit = (m_buf[i+start_code] & 0x7E) >> 1;
-
-        bs_init(m_buf[i+start_code+2]);
-        first_slice     = bs_read_u1();
-        if ( nal_unit >= NAL_UNIT_CODED_SLICE_BLA_W_LP && nal_unit <= NAL_UNIT_RESERVED_IRAP_VCL23 )
-        {
-            no_output = bs_read_u1();
-        }
-        pic_parameter   = bs_read_ue();
-        slice_type      = bs_read_ue();
-
-        /*VPS SPS PPS SEI_PREFIX SEI_SUFFIX
-          SLICE_TRAIL_N SLICE_TRAIL_R IDRW IDRN CRA && HEVC_SLICE_B HEVC_SLICE_I*/
-        if (nal_unit == 0x20 || nal_unit == 0x21 || nal_unit == 0x22 || nal_unit == 0x27 || nal_unit == 0x28
-            ||
-            ((nal_unit == 0x0 || nal_unit == 0x1 || nal_unit == 0x8 || nal_unit == 0x9 || nal_unit == 0x13 || nal_unit == 0x14 || nal_unit == 0x15) && (slice_type >= 0 && slice_type <= 2))) {
-            LOGD("nal_unit: %d, slice_type: %d", nal_unit, slice_type);
-            is_find_end = true;
-            break;
-        }
-    }
-
-    bool flag = false;
-    if(is_find_start && !is_find_end && m_count>0) {
-        flag = is_find_end = true;
-        i = bytes_read;
-        *end = true;
-    }
-
-    if(!is_find_start || !is_find_end) {
-        this->Close();
-        return -1;
-    }
-
-    int size = (i<=in_buf_size ? i : in_buf_size);
-    memcpy(in_buf, m_buf, size);
-
-    if(!flag) {
-        m_count += 1;
-        m_bytes_used += i;
-    }
-    else {
-        m_count = 0;
-        m_bytes_used = 0;
-    }
-
-    fseek(m_file, m_bytes_used, SEEK_SET);
-    return size;
-}
-
-class AACFile
-{
-public:
-    AACFile(int buf_size=500000);
-    ~AACFile();
-
-    bool Open(const char *path);
-    void Close();
-
-    bool IsOpened() const
-    { return (m_file != NULL); }
-
-    int ReadFrame(char* in_buf, int in_buf_size, bool* end);
-
-private:
-    FILE*       m_file          = NULL;
-    uint8_t*    m_buf           = NULL;
-    int         m_buf_size      = 0;
-    int         m_bytes_used    = 0;
-    int         m_count         = 0;
-};
-
-AACFile::AACFile(int buf_size)
-: m_buf_size(buf_size)
-{
-    m_buf = new uint8_t[m_buf_size];
-}
-
-AACFile::~AACFile()
-{
-    delete [] m_buf;
-}
-
-bool AACFile::Open(const char *path)
-{
-    m_file = fopen(path, "rb");
-    if(m_file == NULL) {
-        return false;
-    }
-
-    return true;
-}
-
-void AACFile::Close()
-{
-    if(m_file) {
-        fclose(m_file);
-        m_file = NULL;
-        m_count = 0;
-        m_bytes_used = 0;
-    }
-}
-
-int AACFile::ReadFrame(char* in_buf, int in_buf_size, bool* end)
-{
-    if(m_file == NULL) {
-        return -1;
-    }
-
-    int bytes_read = (int)fread(m_buf, 1, m_buf_size, m_file);
-    if(bytes_read == 0) {
-        fseek(m_file, 0, SEEK_SET);
-        m_count = 0;
-        m_bytes_used = 0;
-        bytes_read = (int)fread(m_buf, 1, m_buf_size, m_file);
-        if(bytes_read == 0)         {
-            this->Close();
-            return -1;
-        }
-    }
-
-    bool is_find_start = false, is_find_end = false;
-    int i = 0;
-    *end = false;
-
-    for (i=0; i<bytes_read; i++) {
-        if(m_buf[i] == 0xff && (m_buf[i+1] & 0xf6)== 0xf0) {
-            is_find_start = true;
-            break;
-        }
-        else  {
-            continue;
-        }
-    }
-
-    uint32_t frame_length = (((unsigned int)m_buf[3] & 0x3) << 11)
-                            |
-                            (((unsigned int)m_buf[4]) << 3)
-                            |
-                            (m_buf[5] >> 5);
-
-    i += frame_length;
-    is_find_end = true;
-
-    bool flag = false;
-    if(is_find_start && !is_find_end && m_count>0) {
-        flag = is_find_end = true;
-        i = bytes_read;
-        *end = true;
-    }
-
-    if(!is_find_start || !is_find_end) {
-        this->Close();
-        return -1;
-    }
-
-    int size = (i<=in_buf_size ? i : in_buf_size);
-    memcpy(in_buf, m_buf, size);
-
-    //debug
-    /*printf("ReadFrame2: %02x%02x%02x%02x %02x%02x%02x%02x%02x%02x%02x%02x\n",
-            *((unsigned char*)(i+m_buf+0)),
-            *((unsigned char*)(i+m_buf+1)),
-            *((unsigned char*)(i+m_buf+2)),
-            *((unsigned char*)(i+m_buf+3)),
-            *((unsigned char*)(i+m_buf+4)),
-            *((unsigned char*)(i+m_buf+5)),
-            *((unsigned char*)(i+m_buf+6)),
-            *((unsigned char*)(i+m_buf+7)),
-            *((unsigned char*)(i+m_buf+8)),
-            *((unsigned char*)(i+m_buf+9)),
-            *((unsigned char*)(i+m_buf+10)),
-            *((unsigned char*)(i+m_buf+11)));*/
-
-    /*if( *((unsigned char*)(i+m_buf+0)) == 0xff
-                &&
-        *((unsigned char*)(i+m_buf+1)) == 0xf1
-                &&
-        *((unsigned char*)(i+m_buf+2)) == 0x50
-                &&
-        *((unsigned char*)(i+m_buf+3)) == 0x80
-                &&
-        *((unsigned char*)(i+m_buf+4)) == 0xbb
-                &&
-        *((unsigned char*)(i+m_buf+5)) == 0xff
-                &&
-        *((unsigned char*)(i+m_buf+6)) == 0xfc
-                &&
-        *((unsigned char*)(i+m_buf+7)) == 0x21
-                &&
-        *((unsigned char*)(i+m_buf+8)) == 0x4c
-                &&
-        *((unsigned char*)(i+m_buf+9)) == 0x6c
-                &&
-        *((unsigned char*)(i+m_buf+10)) == 0xf8
-                &&
-        *((unsigned char*)(i+m_buf+11)) == 0x17)
-        printf("found2\n\n");*/
-
-
-    if(!flag) {
-        m_count += 1;
-        m_bytes_used += i;
-    }
-    else {
-        m_count = 0;
-        m_bytes_used = 0;
-    }
-
-    fseek(m_file, m_bytes_used, SEEK_SET);
-    return size;
-}
-
 //void SendFrameThread(xop::RtspServer* rtsp_server, xop::MediaSessionId session_id, int& clients)
-void SendFrameThread(xop::RtspServer* rtsp_server, xop::MediaSessionId session_id, H265File* h265_file, AACFile* aac_file)
+void SendFrameThread(xop::RtspServer* rtsp_server, xop::MediaSessionId session_id, luckfox_mpi* mpi_handle)
 {
-    uint32_t buf_size       = 2000000;
     uint32_t sleep_video    = 0;
     uint32_t sleep_audio    = 0;
-    std::unique_ptr<uint8_t> frame_buf(new uint8_t[buf_size]);
-    
+   
     while(1)
     {
         if(s_spnet_loop){
             if( sleep_video % 40 == 0 )
             {
                 bool end_of_frame = false;
-                int frame_size = h265_file->ReadFrame((char*)frame_buf.get(), buf_size, &end_of_frame);
-                if(frame_size > 0) {
+                size_t data_len = 0;
+                uint8_t* pData = mpi_handle->venc_get_stream(&data_len);
+                if(data_len > 0) {
                     xop::AVFrame videoFrame = {0};
                     //videoFrame.type = 0;
-                    videoFrame.size = frame_size;
+                    videoFrame.size = data_len;
                     //videoFrame.timestamp = xop::H265Source::GetTimestamp();
                     xop::H265Source::GetTimestamp(&videoFrame.timeNow, &videoFrame.timestamp);
                     videoFrame.buffer.reset(new uint8_t[videoFrame.size]);
-                    memcpy(videoFrame.buffer.get(), frame_buf.get(), videoFrame.size);
+                    memcpy(videoFrame.buffer.get(), pData, videoFrame.size);
                     rtsp_server->PushFrame(session_id, xop::channel_0, videoFrame);
-                }
-                else {
-                    break;
-                }
-            }
-
-            if( sleep_audio % 18 == 0 )
-            {
-                bool end_of_frame = false;
-                int frame_size = aac_file->ReadFrame((char*)frame_buf.get(), buf_size, &end_of_frame);
-                if(frame_size > 0) {
-                    xop::AVFrame audioFrame = {0};
-                    //audioFrame.type = 0;
-                    audioFrame.size = frame_size;
-                    //audioFrame.timestamp = xop::AACSource::GetTimestamp();
-                    xop::AACSource::GetTimestamp(&audioFrame.timeNow, &audioFrame.timestamp);
-                    audioFrame.buffer.reset(new uint8_t[audioFrame.size]);
-                    memcpy(audioFrame.buffer.get(), frame_buf.get(), audioFrame.size);
-                    rtsp_server->PushFrame(session_id, xop::channel_1, audioFrame);
+                    mpi_handle->venc_release_stream();
                 }
                 else {
                     break;
@@ -467,44 +89,14 @@ int main(int argc, char **argv)
     signal(SIGQUIT, signal_handler);
     signal(SIGKILL, signal_handler);
     std::system("RkLunch-stop.sh"); 
-    luckfox_mpi luckfox_mpi_handle(aiq_file_path);
-    luckfox_mpi_handle.init_video_in(sc3336_hdr_mode,
-                                    30,sc3336_width,sc3336_height);
-    luckfox_mpi_handle.init_video_encoder(RK_VIDEO_ID_HEVC,sc3336_width,sc3336_height);
-    uint8_t* stream_ptr = NULL;
-    size_t stream_len = 0;
-    FILE* out_file = fopen("/mnt/sdcard/vid.h265","wb");
-    fclose(out_file);
-    out_file = fopen("/mnt/sdcard/vid.h265","ab");
-    size_t written_bytes = 0;
-    for(uint16_t idx_cnt = 0; idx_cnt < 500; idx_cnt++){
-        stream_ptr = luckfox_mpi_handle.venc_get_stream(&stream_len);
-        if(stream_ptr){
-            written_bytes = fwrite(stream_ptr,1,stream_len,out_file);
-            luckfox_mpi_handle.venc_release_stream();
-        }
-    }
-    fclose(out_file);
-    
+    std::unique_ptr<luckfox_mpi> luckfox_mpi_handle(new luckfox_mpi(aiq_file_path));
+    luckfox_mpi* mpi_handle = luckfox_mpi_handle.get();
+    mpi_handle->init_video_in(sc3336_hdr_mode,
+                                    25,sc3336_width,sc3336_height);
+    mpi_handle->init_video_encoder(RK_VIDEO_ID_HEVC,sc3336_width,sc3336_height);
     //luckfox_mpi_handle.init_vpss();
     //luckfox_mpi_handle.bind_vin_vpss();
     
-    if(argc != 3) {
-        printf("Usage: %s test.265 test.aac\n", argv[0]);
-        return 0;
-    }
-
-    H265File h265_file;
-    if(!h265_file.Open(argv[1])) {
-        printf("Open %s failed.\n", argv[1]);
-        return 0;
-    }
-
-    AACFile aac_file;
-    if(!aac_file.Open(argv[2])) {
-        printf("Open %s failed.\n", argv[1]);
-        return 0;
-    }
 
     int clients = 0;
 	std::string ip = "0.0.0.0";
@@ -534,7 +126,7 @@ int main(int argc, char **argv)
         
 	xop::MediaSessionId session_id = server->AddSession(session); 
          
-	std::thread thread(SendFrameThread, server.get(), session_id, &h265_file, &aac_file);
+	std::thread thread(SendFrameThread, server.get(), session_id, luckfox_mpi_handle.get());
 	thread.detach();
 
     pthread_mutex_lock(&s_main_lock);
@@ -542,8 +134,6 @@ int main(int argc, char **argv)
     pthread_cond_destroy(&s_frame_cond);
     pthread_mutex_destroy(&s_main_lock);
 
-    aac_file.Close();
-    h265_file.Close();
 
     std::cout << "rtsp server exit" << std::endl;
 

@@ -32,7 +32,7 @@ bool luckfox_mpi::init_video_encoder(RK_CODEC_ID_E codec,uint32_t width,uint32_t
     mpi_ctx.video_encoder.stChnAttr.stVencAttr.enType = codec;
     mpi_ctx.video_encoder.s32ChnId = channel_id;
     mpi_ctx.video_encoder.stChnAttr.stRcAttr.enRcMode = VENC_RC_MODE_H265CBR;
-    mpi_ctx.video_encoder.stChnAttr.stRcAttr.stH265Cbr.u32BitRate = 2048;
+    mpi_ctx.video_encoder.stChnAttr.stRcAttr.stH265Cbr.u32BitRate = 8192;
     mpi_ctx.video_encoder.stChnAttr.stGopAttr.enGopMode = VENC_GOPMODE_NORMALP;
     mpi_ctx.video_encoder.stChnAttr.stVencAttr.u32Profile = H265E_PROFILE_MAIN; //main 10 profile
     mpi_ctx.video_encoder.stChnAttr.stVencAttr.enPixelFormat = RK_FMT_YUV420SP;
@@ -57,7 +57,7 @@ bool luckfox_mpi::init_video_encoder(RK_CODEC_ID_E codec,uint32_t width,uint32_t
         LOGE("failed to create video encoder channel. error code:%d",result);
         return false;
     }
-    
+    /*
     //reduces memory but disables reencoding of oversized frames
     VENC_CHN_REF_BUF_SHARE_S stVencChnRefBufShare = {RK_TRUE};
     result = RK_MPI_VENC_SetChnRefBufShareAttr(mpi_ctx.video_encoder.s32ChnId,&stVencChnRefBufShare);
@@ -65,6 +65,7 @@ bool luckfox_mpi::init_video_encoder(RK_CODEC_ID_E codec,uint32_t width,uint32_t
         LOGE("failed to set venc channel ref buffer share. error code:%d",result);
         return false;
     }
+    */
     VENC_RC_PARAM_S pstRcParam;
     memset(&pstRcParam,0,sizeof(pstRcParam));
     pstRcParam.s32FirstFrameStartQp = 26;
@@ -344,8 +345,8 @@ bool luckfox_mpi::init_vi()
     mpi_ctx.video_in.stChnAttr.stIspOpt.enMemoryType = VI_V4L2_MEMORY_TYPE_DMABUF;
     mpi_ctx.video_in.stChnAttr.u32Depth = 0;
     mpi_ctx.video_in.stChnAttr.enPixelFormat = RK_FMT_YUV420SP;
-    mpi_ctx.video_in.stChnAttr.stFrameRate.s32SrcFrameRate = 30;
-    mpi_ctx.video_in.stChnAttr.stFrameRate.s32DstFrameRate = 30;
+    mpi_ctx.video_in.stChnAttr.stFrameRate.s32SrcFrameRate = mpi_ctx.video_in.vi_fps;
+    mpi_ctx.video_in.stChnAttr.stFrameRate.s32DstFrameRate = mpi_ctx.video_in.vi_fps;
     mpi_ctx.video_in.stChnAttr.stIspOpt.enCaptureType = VI_V4L2_CAPTURE_TYPE_VIDEO_CAPTURE;
     mpi_ctx.video_in.stChnAttr.stIspOpt.stMaxSize.u32Height = mpi_ctx.video_in.vi_height;
     mpi_ctx.video_in.stChnAttr.stIspOpt.stMaxSize.u32Width  = mpi_ctx.video_in.vi_width;
