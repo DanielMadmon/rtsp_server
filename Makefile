@@ -28,10 +28,10 @@ INC_FLAGS := $(addprefix -I,$(RKLIBS_INCLUDE))
 CXXFLAGS += -I$(INC_FLAGS)
 
 RKLIBS_LIB = $(RKLIBS_ROOT)/uclibc
-LDLIBS += -L$(RKLIBS_LIB) -lrockiva -lsample_comm -lrockit -lrockchip_mpp -lrkaiq -lrga
+LDLIBS += -L$(RKLIBS_LIB) -lrockit -lrockchip_mpp -lrkaiq -lrga 
 
 CXXFLAGS += -O -g -fPIC -pthread -fmessage-length=0 -std=c++14 -Wall -Werror=format
-CXXFLAGS += -DDYN_LOG
+CXXFLAGS += -DDYN_LOG  -DISP_HW_V30 -DRKPLATFORM -DUAPI2
 LDFLAGS = -ldl -lm -lrt -lpthread
 
 $(shell mkdir -p $(LIB_DIR) $(OBJ_DIR))

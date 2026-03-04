@@ -2,7 +2,6 @@
 #include <iostream>
 #include "generic_log.h"
 
-
 #define RK_ALIGN(x, a) (((x) + (a)-1) & ~((a)-1))
 #define RK_ALIGN_2(x) RK_ALIGN(x, 2)
 
@@ -41,7 +40,7 @@ bool luckfox_mpi::init_video_encoder(RK_CODEC_ID_E codec,uint32_t width,uint32_t
     mpi_ctx.video_encoder.stChnAttr.stVencAttr.u32PicHeight= height;
     mpi_ctx.video_encoder.stChnAttr.stVencAttr.u32MaxPicWidth = width;
     mpi_ctx.video_encoder.stChnAttr.stVencAttr.u32MaxPicHeight= height;
-    mpi_ctx.video_encoder.stChnAttr.stRcAttr.stH265Cbr.u32Gop = 60; //evevry 2 seconds
+    mpi_ctx.video_encoder.stChnAttr.stRcAttr.stH265Cbr.u32Gop = 50; //evevry 50 frames
     mpi_ctx.video_encoder.stChnAttr.stRcAttr.stH265Cbr.u32SrcFrameRateDen = 1;
     mpi_ctx.video_encoder.stChnAttr.stRcAttr.stH265Cbr.fr32DstFrameRateDen= 1;
     mpi_ctx.video_encoder.stChnAttr.stRcAttr.stH265Cbr.u32SrcFrameRateNum = 
@@ -170,7 +169,9 @@ bool luckfox_mpi::init_video_encoder(RK_CODEC_ID_E codec,uint32_t width,uint32_t
     mpi_ctx.video_encoder.b_venc_en = true;
     return true;
 }
-
+static XCamReturn aiq_error_cb(rk_aiq_err_msg_t* err_msg){
+    LOGE("got error:%d",err_msg->err_code);
+}
 
 bool luckfox_mpi::init_vi()
 {
@@ -199,6 +200,7 @@ bool luckfox_mpi::init_vi()
         return false;
     }
     LOGD("device buffer count init");
+   
     //2.5 set preinit scene
     result =  rk_aiq_uapi2_sysctl_preInit_scene(mpi_ctx.video_in.aiq_static_info.sensor_info.sensor_name,
                                             "normal",
@@ -206,22 +208,90 @@ bool luckfox_mpi::init_vi()
     if(result != RK_SUCCESS){
         LOGE("failed to set preinit scene. error code:%d",result);
     }
+    
     //3. initialize control system context
     mpi_ctx.video_in.aiq_ctx = 
         rk_aiq_uapi2_sysctl_init(mpi_ctx.video_in.aiq_static_info.sensor_info.sensor_name,
                                 mpi_ctx.rknn_path,
-                                NULL,NULL);
+                                aiq_error_cb,NULL);
     if(!mpi_ctx.video_in.aiq_ctx){
         LOGE("failed to initialize sysctl.\
              line: %d,file:%s",__LINE__,__FILE__);
         return false;
     }
+    rk_aiq_uapi2_sysctl_prepare(mpi_ctx.video_in.aiq_ctx,
+                                mpi_ctx.video_in.vi_width,
+                                mpi_ctx.video_in.vi_height,
+                                mpi_ctx.video_in.hdr_mode);
+    rk_aiq_uapi2_sysctl_start(mpi_ctx.video_in.aiq_ctx);
     LOGD("init sysctl done.");
     LOGD("sensor name:%s",mpi_ctx.video_in.aiq_static_info.sensor_info.sensor_name);
     LOGD("width:%d",mpi_ctx.video_in.aiq_static_info.sensor_info.support_fmt->width);
     LOGD("height:%d",mpi_ctx.video_in.aiq_static_info.sensor_info.support_fmt->height);
     LOGD("fps:%d",mpi_ctx.video_in.aiq_static_info.sensor_info.support_fmt->fps);
     LOGD("multi_isp_extended_pixel:%d",mpi_ctx.video_in.aiq_static_info.multi_isp_extended_pixel);
+    
+    acp_attrib_t attrib;
+	result = rk_aiq_user_api2_acp_GetAttrib(mpi_ctx.video_in.aiq_ctx, &attrib);
+    LOGI("got brightness %x",attrib.brightness);
+    LOGI("got brightness %x",attrib.contrast);
+    LOGI("got hue %x",attrib.hue);
+    LOGI("got saturation %x",attrib.saturation);
+	attrib.contrast = 50 * 2.55; // value[0,255]
+    attrib.brightness = 50 * 2.55;
+    attrib.hue = 50 * 2.55;
+    attrib.saturation = 50 * 2.55;
+	result |= rk_aiq_user_api2_acp_SetAttrib(mpi_ctx.video_in.aiq_ctx, &attrib);
+
+    Uapi_ExpSwAttrV2_t expSwAttr;
+    expSwAttr.sync.done = false;
+    expSwAttr.AecOpType = RK_AIQ_OP_MODE_MANUAL;
+    //LinearAE
+    expSwAttr.stManual.LinearAE.ManualGainEn = true;
+    expSwAttr.stManual.LinearAE.ManualTimeEn = true;
+    expSwAttr.stManual.LinearAE.GainValue = 1.0f; /*gain = 1x*/
+    expSwAttr.stManual.LinearAE.TimeValue = 0.02f; /*time = 1/50s*/
+    expSwAttr.Enable = true;
+    expSwAttr.sync.sync_mode = RK_AIQ_UAPI_MODE_SYNC;
+    //HdrAE (should set all frames)
+    expSwAttr.stManual.HdrAE.ManualGainEn = true;
+    expSwAttr.stManual.HdrAE.ManualTimeEn = true;
+    expSwAttr.stManual.HdrAE.GainValue[0] = 1.0f; /*sframe gain = 1x*/
+    expSwAttr.stManual.HdrAE.TimeValue[0] = 0.002f; /*sframe time = 1/500s*/
+    expSwAttr.stManual.HdrAE.GainValue[1] = 2.0f; /*mframe gain = 2x*/
+    expSwAttr.stManual.HdrAE.TimeValue[1] = 0.01f; /*mframe time = 1/100s*/
+    expSwAttr.stManual.HdrAE.GainValue[2] = 4.0f; /*lframe gain = 4x*/
+    expSwAttr.stManual.HdrAE.TimeValue[2] = 0.02f; /*lframe time = 1/50s*/
+
+    result |= rk_aiq_user_api2_ae_setExpSwAttr(mpi_ctx.video_in.aiq_ctx,expSwAttr);
+    
+    memset(&expSwAttr,0,sizeof(expSwAttr));
+    result |= rk_aiq_user_api2_ae_getExpSwAttr(mpi_ctx.video_in.aiq_ctx,&expSwAttr);
+    LOGI("got AecOpType:%d",expSwAttr.AecOpType);
+    LOGI("got HdrAE.GainValue[0]:%f", expSwAttr.stManual.HdrAE.GainValue[0]);
+    LOGI("got HdrAE.TimeValue[0]:%f",expSwAttr.stManual.HdrAE.TimeValue[0]);
+    LOGI("got HdrAE.GainValue[2]:%f",expSwAttr.stManual.HdrAE.GainValue[2]);
+    LOGI("got HdrAE.TimeValue[2]%f",expSwAttr.stManual.HdrAE.TimeValue[2]);
+    
+   
+    float fPercent = 0.0f;
+	fPercent = 50 / 100.0f;
+	rk_aiq_sharp_strength_v33_t sharpV33Strength;
+	sharpV33Strength.sync.sync_mode = RK_AIQ_UAPI_MODE_SYNC;
+	sharpV33Strength.percent = fPercent;
+	sharpV33Strength.strength_enable = true;
+    result |= rk_aiq_user_api2_asharpV33_SetStrength(mpi_ctx.video_in.aiq_ctx,&sharpV33Strength);
+    
+    rk_aiq_uapiV2_wb_opMode_t awbAttr{.mode = RK_AIQ_WB_MODE_AUTO};
+    result |= rk_aiq_user_api2_awb_SetWpModeAttrib(mpi_ctx.video_in.aiq_ctx,awbAttr);
+
+    rk_aiq_ynr_strength_v22_t ynrStrength;
+	rk_aiq_bayer2dnr_strength_v23_t bayer2dnrV23Strength;
+    //TODO: spatial and temporal noise reduction + dehazing
+    if(result != RK_SUCCESS){
+        LOGE("failed to set isp attributes. error code %d", result);
+        return false;
+    }
     result = RK_MPI_SYS_Init();
     if(result != RK_SUCCESS){
         LOGE("failed to initialize mpi_sys.\
@@ -297,7 +367,6 @@ bool luckfox_mpi::init_vi()
         LOGE("failed to enable video in channel. error code %d", result);
         return false;
     }
-    
     mpi_ctx.video_in.b_vi_channel_en = true;
     return true;
 }
@@ -445,8 +514,9 @@ uint8_t* luckfox_mpi::venc_get_stream(size_t *stream_len)
         LOGE("call to luckfox_mpi::venc_get_stream before video encoder init!");
         return NULL;
     }
-    
-    while (pthread_mutex_trylock(&venc_stream_mutex) != 0){
+    int8_t ms_max = 80;//2 frames in 30 fps 
+    while (pthread_mutex_trylock(&venc_stream_mutex) != 0 && ms_max){
+        ms_max--;
         usleep(1000);
     }
     memset(&pstStream,0,sizeof(pstStream));
@@ -471,6 +541,7 @@ bool luckfox_mpi::venc_release_stream(){
     int32_t rk_result = 0;
     if(pthread_mutex_trylock(&venc_stream_mutex)){
         rk_result = RK_MPI_VENC_ReleaseStream(mpi_ctx.video_encoder.s32ChnId,&pstStream);
+        pthread_mutex_unlock(&venc_stream_mutex);
         return rk_result == RK_SUCCESS;
     }else{
         LOGE("called venc_release_stream before calling venc_get_stream");

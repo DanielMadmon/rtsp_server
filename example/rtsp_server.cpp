@@ -473,10 +473,19 @@ int main(int argc, char **argv)
     luckfox_mpi_handle.init_video_encoder(RK_VIDEO_ID_HEVC,sc3336_width,sc3336_height);
     uint8_t* stream_ptr = NULL;
     size_t stream_len = 0;
-    stream_ptr = luckfox_mpi_handle.venc_get_stream(&stream_len);
-    LOGI("got stream pointer %p, length:%d",stream_ptr,stream_len);
-    bool res = luckfox_mpi_handle.venc_release_stream();
-    LOGI("Release stream returned:%d",res);
+    FILE* out_file = fopen("/mnt/sdcard/vid.h265","wb");
+    fclose(out_file);
+    out_file = fopen("/mnt/sdcard/vid.h265","ab");
+    size_t written_bytes = 0;
+    for(uint16_t idx_cnt = 0; idx_cnt < 500; idx_cnt++){
+        stream_ptr = luckfox_mpi_handle.venc_get_stream(&stream_len);
+        if(stream_ptr){
+            written_bytes = fwrite(stream_ptr,1,stream_len,out_file);
+            luckfox_mpi_handle.venc_release_stream();
+        }
+    }
+    fclose(out_file);
+    
     //luckfox_mpi_handle.init_vpss();
     //luckfox_mpi_handle.bind_vin_vpss();
     

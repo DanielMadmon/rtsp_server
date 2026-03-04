@@ -37,8 +37,7 @@ public:
 
 private:
     bool init_vi();
-
-
+    const rk_aiq_wb_gain_t gs_wb_gain = {2.083900, 1.000000, 1.000000, 2.018500};
     const int32_t vi_buf_count = 1; 
     int32_t vi_dev_id = 0;
     const uint32_t vpss_max_width = 4096;
