@@ -55,27 +55,10 @@ void MediaSession::FrameCallBack(MediaChannelId channel_id, RtpPacket pkt)
     std::vector<std::shared_ptr<RtpConnection>>                 clients;
     std::map<SOCKET, std::weak_ptr<RtpConnection>>::iterator    mit;
 
-    //for (mit = clients_.begin(); mit != clients_.end();)
     for (mit = clients_.begin(); mit != clients_.end(); mit++)
     {
         //lock() is weak_ptr transfer to shared_ptr
         std::shared_ptr<RtpConnection> conn = mit->second.lock();
-
-        //lock(map_mutex_) has avoid conn to be nullptr
-        /*if (conn == nullptr)
-        {
-            clients_.erase(mit++);
-        }
-        else
-        {
-            //event_loop(new xop::EventLoop()) -> EventLoop::Loop() ->
-            //EpollTaskScheduler(n) -> ::TaskScheduler(int id)
-            //task_schedulers_.push_back(task_scheduler_ptr) already made id >= 0
-            int id = conn->GetId();
-            if (id >= 0)
-                clients.push_back(conn);
-            mit++;
-        }*/
 
         if ( conn )
             clients.push_back(conn);
@@ -100,71 +83,8 @@ void MediaSession::FrameCallBack(MediaChannelId channel_id, RtpPacket pkt)
 bool MediaSession::AddSource(MediaChannelId channel_id, MediaSource* source)
 {
     source->SetCallMember(this, &MediaSession::FrameCallBack);
-
-    /*source->SetSendFrameCallback([&,this](MediaChannelId channel_id, RtpPacket pkt)
-	{
-        std::lock_guard<std::mutex> lock(map_mutex_);
-
-        std::map<int, RtpPacket>                            packets;
-		std::forward_list<std::shared_ptr<RtpConnection>>   clients;
-		{
-			//std::lock_guard<std::mutex> lock(map_mutex_);
-			for (auto iter = clients_.begin(); iter != clients_.end();)
-			{
-				auto conn = iter->second.lock();
-				if (conn == nullptr)
-				{
-					clients_.erase(iter++);
-				}
-				else
-				{
-					int id = conn->GetId();
-					if (id >= 0)
-					{
-						if (packets.find(id) == packets.end())
-						{
-							RtpPacket tmp_pkt;
-
-							tmp_pkt.data        = pkt.data;
-							//memcpy(tmp_pkt.data.get(), pkt.data.get(), pkt.size);
-							tmp_pkt.size        = pkt.size;
-							tmp_pkt.last        = pkt.last;
-							tmp_pkt.timestamp   = pkt.timestamp;
-							//tmp_pkt.type        = pkt.type;
-							packets.emplace(id, tmp_pkt);
-						}
-						clients.emplace_front(conn);
-					}
-					iter++;
-				}
-			}
-		}
-        
-		for(auto& c_iter : clients)
-		{
-			int ret = 0;
-			int id = c_iter->GetId();
-			if (id >= 0)
-			{
-			    std::map<int, RtpPacket>::iterator p_iter = packets.find(id);
-				if (p_iter != packets.end())
-				{
-					ret = c_iter->SendRtpPacket(channel_id, p_iter->second);
-					if (is_multicast_ && ret == 0)
-					{
-					    break;
-					}				
-				}
-			}					
-		}
-
-		delete pkt.data;
-
-		return true;
-	});*/
-
 	media_sources_[channel_id].reset(source);
-
+	
 	return true;
 }
 
@@ -284,6 +204,7 @@ bool MediaSession::AddClient(SOCKET rtspfd, std::shared_ptr<RtpConnection> rtp_c
 	auto iter = clients_.find (rtspfd);
 	if(iter == clients_.end()) {
 		std::weak_ptr<RtpConnection> rtp_conn_weak_ptr = rtp_conn;
+		
 		clients_.emplace(rtspfd, rtp_conn_weak_ptr);
 		for (auto& callback : notify_connected_callbacks_) {
 			callback(session_id_, rtp_conn->GetIp(), rtp_conn->GetPort());

@@ -21,6 +21,7 @@
 #include "MediaSource.h"
 #include "net/Socket.h"
 #include "net/RingBuffer.h"
+#include "luckfox_mpi.hpp"
 
 namespace xop
 {
@@ -36,7 +37,7 @@ public:
 
 	static MediaSession* CreateNew(std::string url_suffix="live");
 	virtual ~MediaSession();
-
+	
 	bool AddSource(MediaChannelId channel_id, MediaSource* source);
 	bool RemoveSource(MediaChannelId channel_id);
 
@@ -46,7 +47,6 @@ public:
 	void AddNotifyDisconnectedCallback(const NotifyDisconnectedCallback& callback);
 
 	void FrameCallBack(MediaChannelId channel_id, RtpPacket pkt);
-
 	std::string GetRtspUrlSuffix() const
 	{ return suffix_; }
 

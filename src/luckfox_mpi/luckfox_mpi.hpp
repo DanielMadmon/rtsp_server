@@ -28,8 +28,10 @@ public:
     bool init_video_in(rk_aiq_working_mode_t mode,int32_t fps,uint32_t width,uint32_t height);
     bool init_vpss();
     bool init_video_encoder(RK_CODEC_ID_E codec,uint32_t width,uint32_t height);
-    uint8_t* venc_get_stream(size_t *stream_len);
+    bool restart_venc_input();
+    uint8_t* venc_get_stream(size_t *stream_len,uint64_t* timestamp);
     bool venc_release_stream();
+    bool venc_request_idr();
     bool bind_vin_vpss();
     bool bind_vin_venc();
     bool bind_vpss_venc();

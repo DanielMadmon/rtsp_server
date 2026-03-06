@@ -12,7 +12,7 @@
 #define MAX_RTP_PAYLOAD_SIZE    1440 //RTP hdr size, live555 ourMaxPacketSize()-12 = 1452 -12
 #define RTP_VERSION			    2
 //#define RTP_TCP_HEAD_SIZE	    4 //transport_mode_ == RTP_OVER_TCP
-#define RTP_TCP_HEAD_SIZE       0 //transport_mode_ == RTP_OVER_TCP, there is no need 4 bytes in SendRtpOverUdp
+#define RTP_TCP_HEAD_SIZE       4 //transport_mode_ == RTP_OVER_TCP, there is no need 4 bytes in SendRtpOverUdp
 #define RTP_VPX_HEAD_SIZE	    1
 //#define RTP_HEADER_BIG_ENDIAN
 #define RTP_PACKET_SIZE         1600

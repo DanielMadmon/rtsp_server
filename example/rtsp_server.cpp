@@ -1,5 +1,6 @@
 ﻿// RTSP Server
 
+
 #include <thread>
 #include <memory>
 #include <iostream>
@@ -26,37 +27,29 @@ static const rk_aiq_working_mode_t sc3336_hdr_mode = RK_AIQ_WORKING_MODE_NORMAL;
 //void SendFrameThread(xop::RtspServer* rtsp_server, xop::MediaSessionId session_id, int& clients)
 void SendFrameThread(xop::RtspServer* rtsp_server, xop::MediaSessionId session_id, luckfox_mpi* mpi_handle)
 {
-    uint32_t sleep_video    = 0;
-    uint32_t sleep_audio    = 0;
-   
+    //TODO: figure out how to reset capture when streaming first frames
     while(1)
     {
         if(s_spnet_loop){
-            if( sleep_video % 40 == 0 )
-            {
-                bool end_of_frame = false;
-                size_t data_len = 0;
-                uint8_t* pData = mpi_handle->venc_get_stream(&data_len);
-                if(data_len > 0) {
-                    xop::AVFrame videoFrame = {0};
-                    //videoFrame.type = 0;
-                    videoFrame.size = data_len;
-                    //videoFrame.timestamp = xop::H265Source::GetTimestamp();
-                    xop::H265Source::GetTimestamp(&videoFrame.timeNow, &videoFrame.timestamp);
-                    videoFrame.buffer.reset(new uint8_t[videoFrame.size]);
-                    memcpy(videoFrame.buffer.get(), pData, videoFrame.size);
-                    rtsp_server->PushFrame(session_id, xop::channel_0, videoFrame);
-                    mpi_handle->venc_release_stream();
-                }
-                else {
-                    break;
-                }
+            bool end_of_frame = false;
+            size_t data_len = 0;
+            uint64_t timestamp = 0;
+            uint8_t* pData = mpi_handle->venc_get_stream(&data_len,&timestamp);
+            if(data_len > 0) {
+                xop::AVFrame videoFrame = {0};
+                //videoFrame.type = 0;
+                videoFrame.size = data_len;
+                xop::H265Source::GetTimestamp(&videoFrame.timeNow,&videoFrame.timestamp);
+                videoFrame.buffer.reset(new uint8_t[videoFrame.size]);
+                memcpy(videoFrame.buffer.get(), pData, videoFrame.size);
+                rtsp_server->PushFrame(session_id, xop::channel_0, videoFrame);
+                mpi_handle->venc_release_stream();
             }
-
-            xop::Timer::Sleep(1);
-            sleep_video++;
-            sleep_audio++;
+            else {
+                break;
+            }
         }
+        xop::Timer::Sleep(1);     
     }
 }
 void connect_callback(xop::MediaSessionId sessionId, std::string peer_ip, uint16_t peer_port)
@@ -92,7 +85,7 @@ int main(int argc, char **argv)
     std::unique_ptr<luckfox_mpi> luckfox_mpi_handle(new luckfox_mpi(aiq_file_path));
     luckfox_mpi* mpi_handle = luckfox_mpi_handle.get();
     mpi_handle->init_video_in(sc3336_hdr_mode,
-                                    25,sc3336_width,sc3336_height);
+                                    30,sc3336_width,sc3336_height);
     mpi_handle->init_video_encoder(RK_VIDEO_ID_HEVC,sc3336_width,sc3336_height);
     //luckfox_mpi_handle.init_vpss();
     //luckfox_mpi_handle.bind_vin_vpss();
@@ -104,6 +97,7 @@ int main(int argc, char **argv)
 
 	std::shared_ptr<xop::EventLoop> event_loop(new xop::EventLoop());
 	std::shared_ptr<xop::RtspServer> server = xop::RtspServer::Create(event_loop.get());
+    
 	if (!server->Start(ip, 554)) {
 		return -1;
 	}
@@ -113,11 +107,10 @@ int main(int argc, char **argv)
 #endif
 	 
 	xop::MediaSession *session = xop::MediaSession::CreateNew("live"); // url: rtsp://ip/live
-	session->AddSource(xop::channel_0, xop::H265Source::CreateNew());
-	//session->AddSource(xop::channel_1, xop::AACSource::CreateNew(44100,2));
-	session->AddSource(xop::channel_1, xop::AACSource::CreateNew()); //use default freq. and channels
-	// session->startMulticast(); /* 开启组播(ip,端口随机生成), 默认使用 RTP_OVER_UDP, RTP_OVER_RTSP */
-    s_spnet_loop = false;
+    
+	session->AddSource(xop::channel_0, xop::H265Source::CreateNew(30));
+    
+	s_spnet_loop = false;
 	session->AddNotifyConnectedCallback(connect_callback);
    
 	session->AddNotifyDisconnectedCallback(disconnect_callback);
