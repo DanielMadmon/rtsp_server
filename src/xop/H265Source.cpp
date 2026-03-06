@@ -129,9 +129,7 @@ bool H265Source::HandleFrame(MediaChannelId channel_id, AVFrame frame)
 		PL_FU[0] = (frame_buf[0] & 0x81) | (49<<1);
 		PL_FU[1] = frame_buf[1];
 		PL_FU[2] = 0x80 | nalUnitType;
-        if((PL_FU[2] >> 6) & (0xC0)){
-			LOGE("error S&E bits set in rtp packets");
-		}
+		PL_FU[2] &= ~(1 << 6);
 		frame_buf  += 2;
 		frame_size -= 2;
         
@@ -144,9 +142,6 @@ bool H265Source::HandleFrame(MediaChannelId channel_id, AVFrame frame)
 			rtp_pkt.timeNow     = frame.timeNow;
 			rtp_pkt.size        = RTP_TCP_HEAD_SIZE + RTP_HEADER_SIZE + MAX_RTP_PAYLOAD_SIZE; //3 FU in
 			rtp_pkt.last        = 0;
-			if((PL_FU[2] >> 6) & (0xC0)){
-				LOGE("error S&E bits set in rtp packets");
-			}
 			rtp_pkt.data.get()[RTP_TCP_HEAD_SIZE + RTP_HEADER_SIZE + 0] = PL_FU[0];
 			rtp_pkt.data.get()[RTP_TCP_HEAD_SIZE + RTP_HEADER_SIZE + 1] = PL_FU[1];
 			rtp_pkt.data.get()[RTP_TCP_HEAD_SIZE + RTP_HEADER_SIZE + 2] = PL_FU[2];
@@ -164,6 +159,7 @@ bool H265Source::HandleFrame(MediaChannelId channel_id, AVFrame frame)
 			frame_size -= (MAX_RTP_PAYLOAD_SIZE - 3);
         
 			PL_FU[2] &= ~0x80; //FU header (no Start bit)
+			PL_FU[2] &= ~(1 << 6);
 		}
         
 		//final packet
@@ -177,7 +173,7 @@ bool H265Source::HandleFrame(MediaChannelId channel_id, AVFrame frame)
 			rtp_pkt.timeNow     = frame.timeNow;
 			rtp_pkt.size        = RTP_TCP_HEAD_SIZE + RTP_HEADER_SIZE + 3 + frame_size;
 			rtp_pkt.last        = 1;
-
+			PL_FU[2] &= ~0x80; //FU header (no Start bit)
 			PL_FU[2] |= 0x40; //set the E bit in the FU header
 			rtp_pkt.data.get()[RTP_TCP_HEAD_SIZE + RTP_HEADER_SIZE + 0] = PL_FU[0];
 			rtp_pkt.data.get()[RTP_TCP_HEAD_SIZE + RTP_HEADER_SIZE + 1] = PL_FU[1];

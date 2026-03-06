@@ -40,7 +40,7 @@ bool luckfox_mpi::init_video_encoder(RK_CODEC_ID_E codec,uint32_t width,uint32_t
     mpi_ctx.video_encoder.stChnAttr.stVencAttr.u32PicHeight= height;
     mpi_ctx.video_encoder.stChnAttr.stVencAttr.u32MaxPicWidth = width;
     mpi_ctx.video_encoder.stChnAttr.stVencAttr.u32MaxPicHeight= height;
-    mpi_ctx.video_encoder.stChnAttr.stRcAttr.stH265Cbr.u32Gop = 50; //evevry 50 frames
+    mpi_ctx.video_encoder.stChnAttr.stRcAttr.stH265Cbr.u32Gop = 10; //evevry 50 frames
     mpi_ctx.video_encoder.stChnAttr.stRcAttr.stH265Cbr.u32SrcFrameRateDen = 1;
     mpi_ctx.video_encoder.stChnAttr.stRcAttr.stH265Cbr.fr32DstFrameRateDen= 1;
     mpi_ctx.video_encoder.stChnAttr.stRcAttr.stH265Cbr.u32SrcFrameRateNum = 
@@ -420,6 +420,7 @@ luckfox_mpi::~luckfox_mpi()
 {
     LOGD("deleting luckfox mpi handle");
     fflush(stdout);
+    //TODO:proper cleanup
     int32_t result_dev = RK_MPI_VI_GetDevIsEnable(vi_dev_id);
     if(result_dev == RK_SUCCESS){
         RK_MPI_VI_DisableDev(vi_dev_id);
