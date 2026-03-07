@@ -2,7 +2,7 @@
 
 #include <sample_comm.h>
 #include <pthread.h>
-
+#include <atomic>
 /*
 * RK_API:
 *   *_channel = module output/input interface. 
@@ -28,10 +28,10 @@ public:
     bool init_video_in(rk_aiq_working_mode_t mode,int32_t fps,uint32_t width,uint32_t height);
     bool init_vpss();
     bool init_video_encoder(RK_CODEC_ID_E codec,uint32_t width,uint32_t height);
-    bool restart_venc_input();
-    uint8_t* venc_get_stream(size_t *stream_len,uint64_t* timestamp);
+    bool start_video_encoder();
+    uint8_t* venc_get_stream(bool restart,size_t *stream_len,uint64_t* timestamp);
     bool venc_release_stream();
-    bool venc_request_idr();
+    bool venc_restart();
     bool bind_vin_vpss();
     bool bind_vin_venc();
     bool bind_vpss_venc();
@@ -89,9 +89,15 @@ private:
         _luckfox_mpi_venc_ctx video_encoder;
         SAMPLE_RGN_CTX_S rgn; //for OSD image modification
    };
+   struct {
+    bool vi_enabled;
+    bool venc_enabled;
+    bool venc_start_rcv;
+    bool vi_bind_venc;
+    std::atomic<bool>stream_locked{false};
+   }enabled_flags = {0};
     VENC_STREAM_S pstStream = {0};
     VENC_PACK_S __attribute__((aligned (16))) pstPack;
-    pthread_mutex_t venc_stream_mutex = PTHREAD_MUTEX_INITIALIZER;
     _luckfox_mpi_ctx mpi_ctx = {0};
    
 };

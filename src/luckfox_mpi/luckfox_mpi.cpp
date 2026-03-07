@@ -20,6 +20,7 @@ bool luckfox_mpi::init_video_in(rk_aiq_working_mode_t mode, int32_t fps,uint32_t
     bool result = init_vi();
     if(result){
         LOGI("init_video_in done.");
+        enabled_flags.vi_enabled = true;
     }else{
         LOGE("init video failed");
     }
@@ -57,6 +58,7 @@ bool luckfox_mpi::init_video_encoder(RK_CODEC_ID_E codec,uint32_t width,uint32_t
         LOGE("failed to create video encoder channel. error code:%d",result);
         return false;
     }
+    enabled_flags.venc_enabled = true;
     /*
     //reduces memory but disables reencoding of oversized frames
     VENC_CHN_REF_BUF_SHARE_S stVencChnRefBufShare = {RK_TRUE};
@@ -142,16 +144,6 @@ bool luckfox_mpi::init_video_encoder(RK_CODEC_ID_E codec,uint32_t width,uint32_t
         return false;
     }
     
-    VENC_RECV_PIC_PARAM_S stRecvParam;
-    memset(&stRecvParam,0,sizeof(stRecvParam));
-    stRecvParam.s32RecvPicNum = -1;
-	result = RK_MPI_VENC_StartRecvFrame(0, &stRecvParam);
-	if (result != RK_SUCCESS) {
-		LOGE("create ch venc failed. error code:%d", result);
-		return false;
-	}
-    bind_vin_venc();
-    mpi_ctx.video_encoder.b_venc_en = true;
     return true;
 }
 static XCamReturn aiq_error_cb(rk_aiq_err_msg_t* err_msg){
@@ -352,7 +344,7 @@ bool luckfox_mpi::init_vi()
         LOGE("failed to enable video in channel. error code %d", result);
         return false;
     }
-    mpi_ctx.video_in.b_vi_channel_en = true;
+    enabled_flags.vi_enabled = true;
     return true;
 }
 
@@ -418,15 +410,47 @@ bool luckfox_mpi::init_vpss(){
 
 luckfox_mpi::~luckfox_mpi()
 {
+    int32_t rk_res = -1;
     LOGD("deleting luckfox mpi handle");
-    fflush(stdout);
     //TODO:proper cleanup
-    int32_t result_dev = RK_MPI_VI_GetDevIsEnable(vi_dev_id);
-    if(result_dev == RK_SUCCESS){
-        RK_MPI_VI_DisableDev(vi_dev_id);
+    if(enabled_flags.stream_locked.load() == true){
+        rk_res = RK_MPI_VENC_ReleaseStream(mpi_ctx.video_encoder.s32ChnId,&pstStream);
+        LOGD("releasing stream in cleanup. res:%d",rk_res);
     }
-    if(mpi_ctx.video_in.b_vi_channel_en){
-        RK_MPI_VI_DisableChn(vi_dev_id,vi_dev_id);
+    if(enabled_flags.vi_bind_venc && rk_res == RK_SUCCESS){
+        MPP_CHN_S vin = {.enModId = RK_ID_VI,
+                            .s32DevId = mpi_ctx.video_in.s32DevId,
+                            .s32ChnId = mpi_ctx.video_in.s32ChnId};
+        MPP_CHN_S venc_channel = {.enModId = RK_ID_VENC,
+                            .s32DevId = mpi_ctx.video_in.s32DevId,
+                            .s32ChnId = mpi_ctx.video_encoder.s32ChnId};
+
+        rk_res = RK_MPI_SYS_UnBind(&vin,&venc_channel);
+        LOGD("calling RK_MPI_SYS_UnBind vin->venc. res:%d",rk_res);
+    }
+    if(enabled_flags.venc_start_rcv && rk_res == RK_SUCCESS){
+        rk_res = RK_MPI_VENC_StopRecvFrame(mpi_ctx.video_encoder.s32ChnId);
+        LOGD("calling RK_MPI_VENC_StopRecvFrame. res:%d",rk_res);
+    }
+    if(enabled_flags.venc_enabled && rk_res == RK_SUCCESS){
+        rk_res |= RK_MPI_VENC_DestroyChn(mpi_ctx.video_encoder.s32ChnId);
+        LOGD("calling RK_MPI_VENC_DestroyChn(venc).res:%d",rk_res);
+    }
+    
+    if(enabled_flags.vi_enabled && rk_res == RK_SUCCESS){
+        rk_res = RK_MPI_VI_DisableChn(mpi_ctx.video_in.u32PipeId,mpi_ctx.video_in.s32ChnId);
+        LOGD("calling RK_MPI_VI_DisableChn. res:%d",rk_res);
+        rk_res = RK_MPI_VI_DisableDev(mpi_ctx.video_in.s32DevId);
+        LOGD("calling RK_MPI_VI_DisableDev. res%d",rk_res);
+    }
+    if(rk_res == RK_SUCCESS){
+        rk_res =  RK_MPI_SYS_Exit();
+        LOGD("calling  RK_MPI_SYS_Exit. res:%d",rk_res);
+    }
+    if(rk_res == RK_SUCCESS){
+        rk_res = rk_aiq_uapi2_sysctl_stop(mpi_ctx.video_in.aiq_ctx,true);
+        rk_aiq_uapi2_sysctl_deinit(mpi_ctx.video_in.aiq_ctx);
+        LOGD("calling  rk_aiq_uapi2_sysctl_stop. res:%d",rk_res);
     }
 }
 
@@ -464,6 +488,7 @@ bool luckfox_mpi::bind_vin_venc()
         return false;
     }else{
         LOGI("vin is binded to venc.");
+        enabled_flags.vi_bind_venc = true;
         return true;
     }
 }
@@ -490,7 +515,7 @@ bool luckfox_mpi::bind_vpss_venc()
 }
 
 
-uint8_t* luckfox_mpi::venc_get_stream(size_t *stream_len,uint64_t* timestamp)
+uint8_t* luckfox_mpi::venc_get_stream(bool restart,size_t *stream_len,uint64_t* timestamp)
 {
     int32_t rk_result = 0;
     uint8_t * stream_ptr = NULL;
@@ -498,20 +523,28 @@ uint8_t* luckfox_mpi::venc_get_stream(size_t *stream_len,uint64_t* timestamp)
         LOGE("Null pointer passed to luckfox_mpi::venc_get_stream!");
         return NULL;
     }
-    if(mpi_ctx.video_encoder.b_venc_en == false){
-        LOGE("call to luckfox_mpi::venc_get_stream before video encoder init!");
+    if(!enabled_flags.vi_bind_venc 
+        || !enabled_flags.vi_bind_venc 
+        || !enabled_flags.venc_enabled 
+        || !enabled_flags.vi_enabled){
+        LOGE("call to luckfox_mpi::venc_get_stream before setting upstream!");
         return NULL;
     }
-    int8_t ms_max = 80;//2 frames in 30 fps 
-    while (pthread_mutex_trylock(&venc_stream_mutex) != 0 && ms_max){
-        ms_max--;
-        usleep(1000);
+    if(enabled_flags.stream_locked.load() == true){
+        LOGE("tried to get stream before releasing stream!");
+        return NULL;
+    }
+    if(restart){
+        if(!venc_restart()){
+            LOGW("failed to restart venc");
+        }
     }
     memset(&pstStream,0,sizeof(pstStream));
     memset(&pstPack,0,sizeof(pstPack));
     pstStream.pstPack = &pstPack;
-    rk_result = RK_MPI_VENC_GetStream(mpi_ctx.video_encoder.s32ChnId,&pstStream,1000);
+    rk_result = RK_MPI_VENC_GetStream(mpi_ctx.video_encoder.s32ChnId,&pstStream,40);
     if(rk_result == RK_SUCCESS){
+        enabled_flags.stream_locked.store(true);
         stream_ptr = (uint8_t*)(RK_MPI_MB_Handle2VirAddr(pstStream.pstPack->pMbBlk));
         if(stream_ptr){
             *stream_len = pstStream.pstPack->u32Len;
@@ -528,9 +561,9 @@ uint8_t* luckfox_mpi::venc_get_stream(size_t *stream_len,uint64_t* timestamp)
 
 bool luckfox_mpi::venc_release_stream(){
     int32_t rk_result = 0;
-    if(pthread_mutex_trylock(&venc_stream_mutex)){
+    if(enabled_flags.stream_locked.load() == true){
         rk_result = RK_MPI_VENC_ReleaseStream(mpi_ctx.video_encoder.s32ChnId,&pstStream);
-        pthread_mutex_unlock(&venc_stream_mutex);
+        enabled_flags.stream_locked.store(false);
         return rk_result == RK_SUCCESS;
     }else{
         LOGE("called venc_release_stream before calling venc_get_stream");
@@ -539,32 +572,48 @@ bool luckfox_mpi::venc_release_stream(){
     return false;
 }
 
-bool luckfox_mpi::venc_request_idr()
+bool luckfox_mpi::venc_restart()
 {
-    if(mpi_ctx.video_encoder.b_venc_en == false){
-        LOGE("requested idr when venc not init");
-        return false;
-    }
-    int32_t res = RK_MPI_VENC_RequestIDR(mpi_ctx.video_encoder.s32ChnId,RK_TRUE);
-    return res == RK_SUCCESS;
-}
-
-
-bool luckfox_mpi::restart_venc_input(){
-    MPP_CHN_S vin = {.enModId = RK_ID_VI,
+    int32_t rk_result = -1;
+    if(enabled_flags.vi_bind_venc){
+        MPP_CHN_S vin = {.enModId = RK_ID_VI,
                             .s32DevId = mpi_ctx.video_in.s32DevId,
                             .s32ChnId = mpi_ctx.video_in.s32ChnId};
-    MPP_CHN_S venc_channel = {.enModId = RK_ID_VENC,
+        MPP_CHN_S venc_channel = {.enModId = RK_ID_VENC,
                             .s32DevId = mpi_ctx.video_in.s32DevId,
                             .s32ChnId = mpi_ctx.video_encoder.s32ChnId};
 
-    int32_t result = RK_MPI_SYS_UnBind(&vin,&venc_channel);
-	result |= RK_MPI_VENC_StopRecvFrame(mpi_ctx.video_encoder.s32ChnId);
+        rk_result = RK_MPI_SYS_UnBind(&vin,&venc_channel);
+        LOGD("calling RK_MPI_SYS_UnBind vin->venc. res:%d",rk_result);
+    }
+    if(enabled_flags.venc_start_rcv && rk_result == RK_SUCCESS){
+        rk_result = RK_MPI_VENC_StopRecvFrame(mpi_ctx.video_encoder.s32ChnId);
+        LOGD("calling RK_MPI_VENC_StopRecvFrame. res:%d",rk_result);
+    }
+    if(enabled_flags.venc_enabled && rk_result == RK_SUCCESS){
+        rk_result |= RK_MPI_VENC_DestroyChn(mpi_ctx.video_encoder.s32ChnId);
+        LOGD("calling RK_MPI_VENC_DestroyChn(venc).res:%d",rk_result);
+    }
+    init_video_encoder(mpi_ctx.video_encoder.stChnAttr.stVencAttr.enType,
+    mpi_ctx.video_encoder.stChnAttr.stVencAttr.u32PicWidth,
+    mpi_ctx.video_encoder.stChnAttr.stVencAttr.u32PicHeight);
+    return start_video_encoder();   
+}
 
+
+bool luckfox_mpi::start_video_encoder(){
     VENC_RECV_PIC_PARAM_S stRecvParam;
     memset(&stRecvParam,0,sizeof(stRecvParam));
     stRecvParam.s32RecvPicNum = -1;
-    result |= RK_MPI_VENC_StartRecvFrame(mpi_ctx.video_encoder.s32ChnId,&stRecvParam);
-    result |= RK_MPI_SYS_Bind(&vin,&venc_channel);
-    return result == RK_SUCCESS;
+    LOGD("calling start recv frame");
+    fflush(stdout);
+	int32_t result = RK_MPI_VENC_StartRecvFrame(0, &stRecvParam);
+	if (result != RK_SUCCESS) {
+		LOGE("create ch venc failed. error code:%d", result);
+		return false;
+	}
+    enabled_flags.venc_start_rcv = true;
+    bool res = bind_vin_venc();
+    enabled_flags.vi_bind_venc = res;
+    return res;
 }

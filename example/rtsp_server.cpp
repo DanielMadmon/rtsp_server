@@ -17,6 +17,8 @@
 
 static volatile bool    s_spnet_loop;
 static volatile int32_t s_client_count;
+static std::atomic<bool>got_sig_f = {false};
+static std::atomic<bool>restart={false};
 static pthread_mutex_t  s_main_lock;
 static pthread_cond_t   s_frame_cond;
 static const char* aiq_file_path = "/oem/usr/share/iqfiles";
@@ -27,15 +29,17 @@ static const rk_aiq_working_mode_t sc3336_hdr_mode = RK_AIQ_WORKING_MODE_NORMAL;
 //void SendFrameThread(xop::RtspServer* rtsp_server, xop::MediaSessionId session_id, int& clients)
 void SendFrameThread(xop::RtspServer* rtsp_server, xop::MediaSessionId session_id, luckfox_mpi* mpi_handle)
 {
+    mpi_handle->start_video_encoder();
     //TODO: figure out how to reset capture when streaming first frames
-    while(1)
+    while(!got_sig_f.load())
     {
         if(s_spnet_loop){
             bool end_of_frame = false;
             size_t data_len = 0;
             uint64_t timestamp = 0;
-            uint8_t* pData = mpi_handle->venc_get_stream(&data_len,&timestamp);
-            if(data_len > 0) {
+            uint8_t* pData = mpi_handle->venc_get_stream(restart.load(),&data_len,&timestamp);
+            restart.store(false);
+            if(data_len > 0 && pData != NULL) {
                 xop::AVFrame videoFrame = {0};
                 //videoFrame.type = 0;
                 videoFrame.size = data_len;
@@ -44,17 +48,17 @@ void SendFrameThread(xop::RtspServer* rtsp_server, xop::MediaSessionId session_i
                 memcpy(videoFrame.buffer.get(), pData, videoFrame.size);
                 rtsp_server->PushFrame(session_id, xop::channel_0, videoFrame);
                 mpi_handle->venc_release_stream();
-            }
-            else {
+            }else{
+                LOGE("failed to get venc stream");
                 break;
             }
         }
-        xop::Timer::Sleep(1);     
     }
 }
 void connect_callback(xop::MediaSessionId sessionId, std::string peer_ip, uint16_t peer_port)
 {
     printf("RTSP client connect, ip=%s, port=%hu \n", peer_ip.c_str(), peer_port);
+    restart.store(true);
     s_spnet_loop = true;
     s_client_count++;
 }
@@ -70,12 +74,14 @@ void signal_handler(int sig)
 {
     if(sig == SIGINT || sig == SIGTERM || sig == SIGQUIT || sig == SIGKILL) {
         s_spnet_loop = false;
+        got_sig_f.store(true);
         int result = pthread_cond_signal(&s_frame_cond);
         LOGD("pthread_cond_signal result: %d", result);
     }
 }
 int main(int argc, char **argv)
 {	
+    got_sig_f.store(false);
     log_level_set(LOG_DBG);
     signal(SIGINT, signal_handler);
     signal(SIGTERM, signal_handler);
