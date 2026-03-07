@@ -72,9 +72,9 @@ bool luckfox_mpi::init_video_encoder(RK_CODEC_ID_E codec,uint32_t width,uint32_t
     memset(&pstRcParam,0,sizeof(pstRcParam));
     pstRcParam.s32FirstFrameStartQp = 26;
     pstRcParam.stParamH265.u32StepQp = 8;
-    pstRcParam.stParamH265.u32MaxQp  = 51;
+    pstRcParam.stParamH265.u32MaxQp  = 35;
     pstRcParam.stParamH265.u32MinQp  = 20;
-    pstRcParam.stParamH265.u32FrmMaxIQp = 46;
+    pstRcParam.stParamH265.u32FrmMaxIQp = 30;
     pstRcParam.stParamH265.u32MinIQp = 24;
     pstRcParam.stParamH265.s32DeltIpQp = 2;
     pstRcParam.stParamH265.s32MaxReEncodeTimes = 1;
@@ -222,7 +222,7 @@ bool luckfox_mpi::init_vi()
 
     Uapi_ExpSwAttrV2_t expSwAttr;
     expSwAttr.sync.done = false;
-    expSwAttr.AecOpType = RK_AIQ_OP_MODE_MANUAL;
+    expSwAttr.AecOpType = RK_AIQ_OP_MODE_AUTO;
     //LinearAE
     expSwAttr.stManual.LinearAE.ManualGainEn = true;
     expSwAttr.stManual.LinearAE.ManualTimeEn = true;
