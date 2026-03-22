@@ -9,6 +9,7 @@ CROSS_COMPILE = arm-rockchip830-linux-uclibcgnueabihf-
 CXX = $(CROSS_COMPILE)g++
 
 CXXFLAGS =  -I./src
+CXXFLAGS += -I./src/rtsp_server
 CXXFLAGS += -I./src/3rdpart
 CXXFLAGS += -I./src/bsalgo
 CXXFLAGS += -I./src/net
@@ -41,7 +42,7 @@ $(OBJ_DIR)/%.o: ./src/net/%.cpp
 $(OBJ_DIR)/%.o: ./src/xop/%.cpp
 	$(CXX) -c $(CXXFLAGS) $< -o $@
 
-$(OBJ_DIR)/%.o: ./example/%.cpp
+$(OBJ_DIR)/%.o: ./src/rtsp_server/%.cpp
 	$(CXX) -c $(CXXFLAGS) $< -o $@
 
 $(OBJ_DIR)/%.o: ./src/luckfox_mpi/%.cpp
@@ -59,7 +60,7 @@ CXXOBJS1    = $(patsubst %.cpp, $(OBJ_DIR)/%.o, $(CXXFILES1))
 CXXFILES2   = $(notdir $(wildcard ./src/bsalgo/*.cpp))
 CXXOBJS2    = $(patsubst %.cpp, $(OBJ_DIR)/%.o, $(CXXFILES2))
 
-CXXFILES3   = $(notdir $(wildcard ./example/rtsp_server.cpp))
+CXXFILES3   = $(notdir $(wildcard ./src/rtsp_server/rtsp_server.cpp))
 CXXOBJS3    = $(patsubst %.cpp, $(OBJ_DIR)/%.o, $(CXXFILES3))
 
 CXXFILES8   = $(notdir $(wildcard ./src/luckfox_mpi/*.cpp))

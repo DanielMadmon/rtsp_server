@@ -26,6 +26,11 @@ bool luckfox_mpi::init_video_in(rk_aiq_working_mode_t mode, int32_t fps,uint32_t
     }
     return result;
 }
+/// @brief initialize video encoder
+/// @param codec currently unused fixed to RK_VIDEO_ID_HEVC
+/// @param width input image width
+/// @param height input image height
+/// @return false on fail
 bool luckfox_mpi::init_video_encoder(RK_CODEC_ID_E codec,uint32_t width,uint32_t height)
 {   
     memset(&mpi_ctx.video_encoder,0,sizeof(mpi_ctx.video_encoder));
@@ -59,15 +64,6 @@ bool luckfox_mpi::init_video_encoder(RK_CODEC_ID_E codec,uint32_t width,uint32_t
         return false;
     }
     enabled_flags.venc_enabled = true;
-    /*
-    //reduces memory but disables reencoding of oversized frames
-    VENC_CHN_REF_BUF_SHARE_S stVencChnRefBufShare = {RK_TRUE};
-    result = RK_MPI_VENC_SetChnRefBufShareAttr(mpi_ctx.video_encoder.s32ChnId,&stVencChnRefBufShare);
-    if(result != RK_SUCCESS){
-        LOGE("failed to set venc channel ref buffer share. error code:%d",result);
-        return false;
-    }
-    */
     VENC_RC_PARAM_S pstRcParam;
     memset(&pstRcParam,0,sizeof(pstRcParam));
     pstRcParam.s32FirstFrameStartQp = 26;
@@ -365,7 +361,6 @@ bool luckfox_mpi::init_vpss(){
         mpi_ctx.video_in.stChnAttr.stFrameRate.s32DstFrameRate;
     mpi_ctx.vpss.stVpssChnAttr.stFrameRate.s32DstFrameRate   =
         mpi_ctx.video_in.stChnAttr.stFrameRate.s32DstFrameRate;
-
     mpi_ctx.vpss.stGrpVpssAttr.enPixelFormat = mpi_ctx.video_in.stChnAttr.enPixelFormat;
     mpi_ctx.vpss.stGrpVpssAttr.enCompressMode= mpi_ctx.video_in.stChnAttr.enCompressMode;
     mpi_ctx.vpss.stGrpVpssAttr.u32MaxH = vpss_max_width;
@@ -515,6 +510,11 @@ bool luckfox_mpi::bind_vpss_venc()
 }
 
 
+/// @brief get bytestream from video encoder
+/// @param restart [in] true on restarting the encoder(best way to ensure IDR)
+/// @param stream_len [out] the returned stream length in bytes
+/// @param timestamp [out] 64 bits timestamp for the stream from venc
+/// @return NULL on fail
 uint8_t* luckfox_mpi::venc_get_stream(bool restart,size_t *stream_len,uint64_t* timestamp)
 {
     int32_t rk_result = 0;
@@ -601,6 +601,8 @@ bool luckfox_mpi::venc_restart()
 }
 
 
+/// @brief must be called after init_video_encoder and before venc_get_stream
+/// @return false on fail
 bool luckfox_mpi::start_video_encoder(){
     VENC_RECV_PIC_PARAM_S stRecvParam;
     memset(&stRecvParam,0,sizeof(stRecvParam));
