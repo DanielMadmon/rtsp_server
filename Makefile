@@ -27,7 +27,7 @@ RKLIBS_LIB = $(RKLIBS_ROOT)/uclibc
 LDLIBS += -L$(RKLIBS_LIB) -lrockit -lrockchip_mpp -lrkaiq -lrga 
 
 CXXFLAGS += -O -g -fPIC -pthread -fmessage-length=0 -std=c++14 -Wall -Werror=format
-CXXFLAGS += -DDYN_LOG  -DISP_HW_V30 -DRKPLATFORM -DUAPI2
+CXXFLAGS += -DDYN_LOG  -DISP_HW_V30 -DRKPLATFORM -DUAPI2 -DRTSP_DEBUG=0
 LDFLAGS = -ldl -lm -lrt -lpthread
 
 $(shell mkdir -p $(LIB_DIR) $(OBJ_DIR))

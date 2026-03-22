@@ -41,7 +41,7 @@ H265Source::~H265Source()
 string H265Source::GetMediaDescription(uint16_t port)
 {
 	char buf[100] = {0};
-	sprintf(buf, "m=video %hu RTP/AVP/TCP 96", port);
+	sprintf(buf, "m=video %hu RTP/AVP 96", port);
 	return string(buf);
 }
 	

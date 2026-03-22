@@ -81,6 +81,7 @@ void signal_handler(int sig)
 }
 int main(int argc, char **argv)
 {	
+    //TODO:Add support for UDP stream
     got_sig_f.store(false);
     log_level_set(LOG_DBG);
     signal(SIGINT, signal_handler);
@@ -98,7 +99,7 @@ int main(int argc, char **argv)
     
 
     int clients = 0;
-	std::string ip = "0.0.0.0";
+	std::string ip = "127.0.0.1";
 	std::string rtsp_url = "rtsp://127.0.0.1:554/live";
 
 	std::shared_ptr<xop::EventLoop> event_loop(new xop::EventLoop());
@@ -124,7 +125,7 @@ int main(int argc, char **argv)
 	std::cout << "URL: " << rtsp_url << std::endl;
         
 	xop::MediaSessionId session_id = server->AddSession(session); 
-         
+    LOGD("rtsp_server session id:%d",session_id);    
 	std::thread thread(SendFrameThread, server.get(), session_id, luckfox_mpi_handle.get());
 	thread.detach();
 

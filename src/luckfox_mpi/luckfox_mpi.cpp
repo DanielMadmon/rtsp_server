@@ -29,7 +29,7 @@ bool luckfox_mpi::init_video_in(rk_aiq_working_mode_t mode, int32_t fps,uint32_t
 bool luckfox_mpi::init_video_encoder(RK_CODEC_ID_E codec,uint32_t width,uint32_t height)
 {   
     memset(&mpi_ctx.video_encoder,0,sizeof(mpi_ctx.video_encoder));
-    //TODO:enable setting codec(H264/H265/JPEG)
+    //TODO:enable setting codec(H264 codec)
     mpi_ctx.video_encoder.stChnAttr.stVencAttr.enType = codec;
     mpi_ctx.video_encoder.s32ChnId = channel_id;
     mpi_ctx.video_encoder.stChnAttr.stRcAttr.enRcMode = VENC_RC_MODE_H265CBR;
@@ -542,7 +542,7 @@ uint8_t* luckfox_mpi::venc_get_stream(bool restart,size_t *stream_len,uint64_t* 
     memset(&pstStream,0,sizeof(pstStream));
     memset(&pstPack,0,sizeof(pstPack));
     pstStream.pstPack = &pstPack;
-    rk_result = RK_MPI_VENC_GetStream(mpi_ctx.video_encoder.s32ChnId,&pstStream,40);
+    rk_result = RK_MPI_VENC_GetStream(mpi_ctx.video_encoder.s32ChnId,&pstStream,120);
     if(rk_result == RK_SUCCESS){
         enabled_flags.stream_locked.store(true);
         stream_ptr = (uint8_t*)(RK_MPI_MB_Handle2VirAddr(pstStream.pstPack->pMbBlk));

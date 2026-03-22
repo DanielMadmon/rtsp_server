@@ -6,9 +6,9 @@
 #include "MediaSession.h"
 #include "MediaSource.h"
 #include "net/SocketUtil.h"
+#include "generic_log.h"
 
 #define USER_AGENT "-_-"
-#define RTSP_DEBUG 0
 #define MAX_RTSP_MESSAGE_SIZE 2048
 
 using namespace xop;
@@ -159,7 +159,7 @@ bool RtspConnection::HandleRtspResponse(BufferReader& buffer)
 #if RTSP_DEBUG
 	string str(buffer.Peek(), buffer.ReadableBytes());
 	if (str.find("rtsp") != string::npos || str.find("RTSP") != string::npos) {
-		cout << str << endl;
+		cout << str << endl << flush;
 	}		
 #endif
 
@@ -286,13 +286,18 @@ void RtspConnection::HandleCmdSetup()
 	std::shared_ptr<char> res(new char[4096], std::default_delete<char[]>());
 	MediaChannelId channel_id = rtsp_request_->GetChannelId();
 	MediaSession::Ptr media_session = nullptr;
-
+	
 	auto rtsp = rtsp_.lock();
 	if (rtsp) {
+		LOGD("session id:%d",session_id_);
 		media_session = rtsp->LookMediaSession(session_id_);
+	}else{
+		LOGE("failed to lock rtsp_.");
 	}
 
 	if(!rtsp || !media_session)  {
+		LOGE("error at:file:%s,line:%d",__FILE__,__LINE__);
+		LOGE("rtsp is null:%d, media_session is null:%d",!rtsp,!media_session);
 		goto server_error;
 	}
 
@@ -302,6 +307,7 @@ void RtspConnection::HandleCmdSetup()
 			uint16_t port = media_session->GetMulticastPort(channel_id);
 			uint16_t session_id = rtp_conn_->GetRtpSessionId();
 			if (!rtp_conn_->SetupRtpOverMulticast(channel_id, multicast_ip.c_str(), port)) {
+				LOGE("error at:file:%s,line:%d",__FILE__,__LINE__);
 				goto server_error;
 			}
 
@@ -333,6 +339,7 @@ void RtspConnection::HandleCmdSetup()
 				task_scheduler_->UpdateChannel(rtcp_channels_[channel_id]);
 			}
 			else {
+				LOGE("error at:file:%s,line:%d",__FILE__,__LINE__);
 				goto server_error;
 			}
 

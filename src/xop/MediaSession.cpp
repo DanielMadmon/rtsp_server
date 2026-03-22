@@ -127,10 +127,11 @@ std::string MediaSession::GetSdpMessage(std::string ip, std::string session_name
 
 	snprintf(buf, sizeof(buf),
 			"v=0\r\n"
-			"o=- 9%ld 1 IN IP4 %s\r\n"
+			"o=- 0 0 IN IP4 %s\r\n"  /*changed to 0 0 from timenow 1*/
 			"t=0 0\r\n"
-			"a=control:*\r\n" ,
-			(long)std::time(NULL), ip.c_str()); 
+			"a=control:rtsp://%s:554/live\r\n"
+			"a=range:npt=0-\r\n",
+			ip.c_str(),ip.c_str()); 
 
 	if(session_name != "") {
 		snprintf(buf+strlen(buf), sizeof(buf)-strlen(buf), 
@@ -164,9 +165,8 @@ std::string MediaSession::GetSdpMessage(std::string ip, std::string session_name
 			snprintf(buf+strlen(buf), sizeof(buf)-strlen(buf), 
 					"%s\r\n",
 					media_sources_[chn]->GetAttribute().c_str());
-                     
 			snprintf(buf+strlen(buf), sizeof(buf)-strlen(buf),											
-					"a=control:track%d\r\n", chn);	
+					"a=control:track%d\r\n",chn);	
 		}
 	}
 
