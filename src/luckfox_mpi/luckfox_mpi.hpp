@@ -3,6 +3,7 @@
 #include <sample_comm.h>
 #include <pthread.h>
 #include <atomic>
+#include <string>
 /*
 * RK_API:
 *   *_channel = module output/input interface. 
@@ -23,7 +24,7 @@ struct _luckfox_mpi_venc_ctx;
 class luckfox_mpi
 {
 public:
-    luckfox_mpi(const char* rknn_path="/oem/usr/share/iqfiles");
+    luckfox_mpi(std::string rknn_path="/oem/usr/share/iqfiles");
     bool init_video_in(rk_aiq_working_mode_t mode,int32_t fps,uint32_t width,uint32_t height);
     bool init_vpss();
     bool init_video_encoder(RK_CODEC_ID_E codec,uint32_t width,uint32_t height);
@@ -83,7 +84,7 @@ private:
         bool b_venc_en;
     };
     struct _luckfox_mpi_ctx{
-        const char* rknn_path;
+        std::string rknn_path;
         _luckfox_mpi_vi_ctx video_in;
         _luckfox_mpi_vpss_ctx vpss;
         _luckfox_mpi_venc_ctx video_encoder;
@@ -97,8 +98,8 @@ private:
     bool vi_bind_venc;
     std::atomic<bool>stream_locked{false};
    }enabled_flags = {0};
-    VENC_STREAM_S * pstStream = NULL;
-    VENC_PACK_S * pstPack = NULL;
-    _luckfox_mpi_ctx mpi_ctx = {0};
+    VENC_STREAM_S pstStream = {0};
+    VENC_PACK_S pstPack = {0};
+    _luckfox_mpi_ctx mpi_ctx;
    
 };

@@ -46,8 +46,9 @@ bool osd::text_osd::load_ttf_file(const std::string &ttf_file_path)
 }
 
 
-bool osd::text_osd::render_text_rgba8888(const std::string &text, std::vector<uint8_t> &buffer, bmp_resolution &res)
+bool osd::text_osd::render_text_rgba(const std::string &text, std::vector<uint8_t> &buffer, bmp_resolution &res)
 {
+    
     int res_stb = stbtt_InitFont(&font_info,&ttf_file[0],0);
     if(!res_stb){
         LOGE("failed to initialize font.");
@@ -136,7 +137,7 @@ void osd::text_osd::set_font_size(uint32_t size)
     st_font_size = size;
 }
 
-bool osd::text_osd::save_rgba8888_to_bmp(const std::string &filename, std::vector<uint8_t> &buffer,bmp_resolution& res)
+bool osd::text_osd::save_rgba_to_bmp(const std::string &filename, std::vector<uint8_t> &buffer,bmp_resolution& res)
 {
     int ret = 0;
     ret = stbi_write_bmp(filename.c_str(),res.width,res.height,4,&buffer[0]);

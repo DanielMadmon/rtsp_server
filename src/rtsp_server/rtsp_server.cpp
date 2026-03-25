@@ -18,11 +18,10 @@
 static volatile bool    s_spnet_loop;
 static volatile int32_t s_client_count;
 static std::atomic<bool>got_sig_f = {false};
-static std::atomic<bool>restart={false};
+static volatile bool restart = false;
 static pthread_mutex_t  s_main_lock;
 static pthread_cond_t   s_frame_cond;
 static const char* aiq_file_path = CONF_AIQ_FILES_PATH;
-static const char* archive_file_path = "/mnt/sdcard/";
 static const uint32_t sc3336_width = CONF_SENSOR_WIDTH;
 static const uint32_t sc3336_height= CONF_SENSOR_HEIGHT;
 static const rk_aiq_working_mode_t sc3336_hdr_mode = CONF_HDR_MODE;
@@ -35,8 +34,8 @@ void SendFrameThread(xop::RtspServer* rtsp_server, xop::MediaSessionId session_i
         if(s_spnet_loop){
             size_t data_len = 0;
             uint64_t timestamp = 0;
-            uint8_t* pData = mpi_handle->venc_get_stream(restart.load(),&data_len,&timestamp);
-            restart.store(false);
+            uint8_t* pData = mpi_handle->venc_get_stream(restart,&data_len,&timestamp);
+            restart = false;
             if(data_len > 0 && pData != NULL) {
                 xop::AVFrame videoFrame = {0};
                 //videoFrame.type = 0;
@@ -56,7 +55,7 @@ void SendFrameThread(xop::RtspServer* rtsp_server, xop::MediaSessionId session_i
 void connect_callback(xop::MediaSessionId sessionId, std::string peer_ip, uint16_t peer_port)
 {
     printf("RTSP client connect, ip=%s, port=%hu \n", peer_ip.c_str(), peer_port);
-    restart.store(true);
+    restart = true;
     s_spnet_loop = true;
     s_client_count++;
 }
@@ -101,11 +100,16 @@ int main(int argc, char **argv)
     osd::text_osd osd_handle(32);
     
     osd_handle.load_ttf_file(font_file_path);
-    std::vector<uint8_t>pixel_buffer(1024,0);
-    osd::bmp_resolution resolution {0};
-    bool res_render = osd_handle.render_text_rgba8888("test text 1234:/",pixel_buffer,resolution);
+    std::vector<uint8_t>pixel_buffer(4096);
+    osd::bmp_resolution resolution =  {0};
+    auto start = std::chrono::high_resolution_clock::now();
+    bool res_render = osd_handle.render_text_rgba("test text 1234:/",pixel_buffer,resolution);
+    auto elapsed = std::chrono::high_resolution_clock::now() - start;
+    long long microseconds = std::chrono::duration_cast<std::chrono::microseconds>(
+        elapsed).count();
+    LOGI("render time:%lld",microseconds);
     LOGI("result reneder text:%d,width:%d,height%d",res_render,resolution.width,resolution.height);
-    res_render = osd_handle.save_rgba8888_to_bmp("/mnt/sdcard/test.bmp",pixel_buffer,resolution);
+    res_render = osd_handle.save_rgba_to_bmp("/mnt/sdcard/test.bmp",pixel_buffer,resolution);
     LOGI("res bmp write:%d",res_render);
 	if (!server->Start(ip, 554)) {
 		return -1;

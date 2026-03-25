@@ -2,13 +2,16 @@
 #include <iostream>
 #include "generic_log.h"
 #include "im2d.hpp"
-
+#include <string>
 #define RK_ALIGN(x, a) (((x) + (a)-1) & ~((a)-1))
 #define RK_ALIGN_2(x) RK_ALIGN(x, 2)
 
-luckfox_mpi::luckfox_mpi(const char *rknn_path)
+luckfox_mpi::luckfox_mpi(std::string rknn_path)
 {
     mpi_ctx.rknn_path = rknn_path;
+    mpi_ctx.osd_enable = false;
+    mpi_ctx.video_encoder.b_venc_en = false;
+    mpi_ctx.video_in.b_vi_channel_en = false;
 }
 
 bool luckfox_mpi::init_video_in(rk_aiq_working_mode_t mode, int32_t fps,uint32_t width,uint32_t height)
@@ -145,6 +148,7 @@ bool luckfox_mpi::init_video_encoder(RK_CODEC_ID_E codec,uint32_t width,uint32_t
 }
 static XCamReturn aiq_error_cb(rk_aiq_err_msg_t* err_msg){
     LOGE("got error:%d",err_msg->err_code);
+    return XCamReturn::XCAM_RETURN_ERROR_FAILED;
 }
 
 bool luckfox_mpi::init_vi()
@@ -152,7 +156,7 @@ bool luckfox_mpi::init_vi()
     //1. init device
     int32_t result = RK_FAILURE;
     char hdr_env_var[16] = {0};
-    char * env_var = "HDR_MODE";
+    char env_var[] = "HDR_MODE";
     snprintf(hdr_env_var,sizeof(hdr_env_var),"%u",mpi_ctx.video_in.hdr_mode);
     result = setenv(env_var,hdr_env_var,1);
     LOGD("enumarating static metas by phy ID. result setenv hdr_mode:%d",result);
@@ -186,7 +190,7 @@ bool luckfox_mpi::init_vi()
     //3. initialize control system context
     mpi_ctx.video_in.aiq_ctx = 
         rk_aiq_uapi2_sysctl_init(mpi_ctx.video_in.aiq_static_info.sensor_info.sensor_name,
-                                mpi_ctx.rknn_path,
+                                mpi_ctx.rknn_path.c_str(),
                                 aiq_error_cb,NULL);
     if(!mpi_ctx.video_in.aiq_ctx){
         LOGE("failed to initialize sysctl.\
@@ -263,8 +267,6 @@ bool luckfox_mpi::init_vi()
     rk_aiq_uapiV2_wb_opMode_t awbAttr{.mode = RK_AIQ_WB_MODE_AUTO};
     result |= rk_aiq_user_api2_awb_SetWpModeAttrib(mpi_ctx.video_in.aiq_ctx,awbAttr);
 
-    rk_aiq_ynr_strength_v22_t ynrStrength;
-	rk_aiq_bayer2dnr_strength_v23_t bayer2dnrV23Strength;
     //TODO: spatial and temporal noise reduction + dehazing
     if(result != RK_SUCCESS){
         LOGE("failed to set isp attributes. error code %d", result);
@@ -414,14 +416,8 @@ luckfox_mpi::~luckfox_mpi()
     LOGD("deleting luckfox mpi handle");
     //TODO:proper cleanup
     if(enabled_flags.stream_locked.load() == true){
-        rk_res = RK_MPI_VENC_ReleaseStream(mpi_ctx.video_encoder.s32ChnId,pstStream);
+        rk_res = RK_MPI_VENC_ReleaseStream(mpi_ctx.video_encoder.s32ChnId,&pstStream);
         LOGD("releasing stream in cleanup. res:%d",rk_res);
-    }
-    if(pstPack){
-        free(pstPack);
-    }
-    if(pstStream){
-        free(pstStream);
     }
     if(enabled_flags.vi_bind_venc && rk_res == RK_SUCCESS){
         MPP_CHN_S vin = {.enModId = RK_ID_VI,
@@ -550,30 +546,17 @@ uint8_t* luckfox_mpi::venc_get_stream(bool restart,size_t *stream_len,uint64_t* 
             LOGW("failed to restart venc");
         }
     }
-    if(!pstStream){
-        pstStream = (VENC_STREAM_S*)aligned_alloc(16,sizeof(VENC_STREAM_S));
-        if(!pstStream){
-            LOGE("failed to allocate pstStream for venc");
-            return NULL;
-        }
-    }
-    if(!pstPack){
-        pstPack = (VENC_PACK_S*)aligned_alloc(16,sizeof(VENC_PACK_S));
-        if(!pstPack){
-            LOGE("failed to allocate pstPack for venc");
-            return NULL;
-        }
-    }
+    
     memset(&pstStream,0,sizeof(pstStream));
     memset(&pstPack,0,sizeof(pstPack));
-    pstStream->pstPack = pstPack;
-    rk_result = RK_MPI_VENC_GetStream(mpi_ctx.video_encoder.s32ChnId,pstStream,120);
+    pstStream.pstPack = &pstPack;
+    rk_result = RK_MPI_VENC_GetStream(mpi_ctx.video_encoder.s32ChnId,&pstStream,120);
     if(rk_result == RK_SUCCESS){
         enabled_flags.stream_locked.store(true);
-        stream_ptr = (uint8_t*)(RK_MPI_MB_Handle2VirAddr(pstStream->pstPack->pMbBlk));
+        stream_ptr = (uint8_t*)(RK_MPI_MB_Handle2VirAddr(pstStream.pstPack->pMbBlk));
         if(stream_ptr){
-            *stream_len = pstStream->pstPack->u32Len;
-            *timestamp = pstStream->pstPack->u64PTS;
+            *stream_len = pstStream.pstPack->u32Len;
+            *timestamp = pstStream.pstPack->u64PTS;
             return stream_ptr;
         }else{
             return NULL;
@@ -587,7 +570,7 @@ uint8_t* luckfox_mpi::venc_get_stream(bool restart,size_t *stream_len,uint64_t* 
 bool luckfox_mpi::venc_release_stream(){
     int32_t rk_result = 0;
     if(enabled_flags.stream_locked.load() == true){
-        rk_result = RK_MPI_VENC_ReleaseStream(mpi_ctx.video_encoder.s32ChnId,pstStream);
+        rk_result = RK_MPI_VENC_ReleaseStream(mpi_ctx.video_encoder.s32ChnId,&pstStream);
         enabled_flags.stream_locked.store(false);
         return rk_result == RK_SUCCESS;
     }else{
