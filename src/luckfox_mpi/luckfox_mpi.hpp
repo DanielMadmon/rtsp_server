@@ -20,7 +20,6 @@ struct _luckfox_mpi_vi_ctx;
 struct _luckfox_mpi_vpss_ctx;
 struct _luckfox_mpi_venc_ctx;
 
-
 class luckfox_mpi
 {
 public:
@@ -28,7 +27,7 @@ public:
     bool init_video_in(rk_aiq_working_mode_t mode,int32_t fps,uint32_t width,uint32_t height);
     bool init_vpss();
     bool init_video_encoder(RK_CODEC_ID_E codec,uint32_t width,uint32_t height);
-    bool start_video_encoder();
+    bool start_video_encoder(bool osd_enable);
     uint8_t* venc_get_stream(bool restart,size_t *stream_len,uint64_t* timestamp);
     bool venc_release_stream();
     bool venc_restart();
@@ -39,6 +38,7 @@ public:
 
 private:
     bool init_vi();
+    bool vi_osd();
     const rk_aiq_wb_gain_t gs_wb_gain = {2.083900, 1.000000, 1.000000, 2.018500};
     const int32_t vi_buf_count = 1; 
     int32_t vi_dev_id = 0;
@@ -87,6 +87,7 @@ private:
         _luckfox_mpi_vi_ctx video_in;
         _luckfox_mpi_vpss_ctx vpss;
         _luckfox_mpi_venc_ctx video_encoder;
+        bool osd_enable;
         SAMPLE_RGN_CTX_S rgn; //for OSD image modification
    };
    struct {
@@ -96,9 +97,8 @@ private:
     bool vi_bind_venc;
     std::atomic<bool>stream_locked{false};
    }enabled_flags = {0};
-    VENC_STREAM_S pstStream = {0};
-    VENC_PACK_S __attribute__((aligned (16))) pstPack;
+    VENC_STREAM_S * pstStream = NULL;
+    VENC_PACK_S * pstPack = NULL;
     _luckfox_mpi_ctx mpi_ctx = {0};
    
 };
-

@@ -1,6 +1,7 @@
 #include "luckfox_mpi.hpp"
 #include <iostream>
 #include "generic_log.h"
+#include "im2d.hpp"
 
 #define RK_ALIGN(x, a) (((x) + (a)-1) & ~((a)-1))
 #define RK_ALIGN_2(x) RK_ALIGN(x, 2)
@@ -220,15 +221,19 @@ bool luckfox_mpi::init_vi()
     expSwAttr.sync.done = false;
     expSwAttr.AecOpType = RK_AIQ_OP_MODE_AUTO;
     //LinearAE
-    expSwAttr.stManual.LinearAE.ManualGainEn = true;
-    expSwAttr.stManual.LinearAE.ManualTimeEn = true;
+    expSwAttr.stManual.LinearAE.ManualGainEn = false;
+    expSwAttr.stManual.LinearAE.ManualTimeEn = false;
     expSwAttr.stManual.LinearAE.GainValue = 1.0f; /*gain = 1x*/
     expSwAttr.stManual.LinearAE.TimeValue = 0.02f; /*time = 1/50s*/
     expSwAttr.Enable = true;
+    expSwAttr.stAuto.LinAeRange.stExpTimeRange.Min = 1.0f / 500.0f;
+    expSwAttr.stAuto.LinAeRange.stExpTimeRange.Max = 1.0f / 50.0f;
+    expSwAttr.stAuto.LinAeRange.stGainRange.Min = 1.0f;
+    expSwAttr.stAuto.LinAeRange.stGainRange.Max = 4.0f;
     expSwAttr.sync.sync_mode = RK_AIQ_UAPI_MODE_SYNC;
     //HdrAE (should set all frames)
-    expSwAttr.stManual.HdrAE.ManualGainEn = true;
-    expSwAttr.stManual.HdrAE.ManualTimeEn = true;
+    expSwAttr.stManual.HdrAE.ManualGainEn = false;
+    expSwAttr.stManual.HdrAE.ManualTimeEn = false;
     expSwAttr.stManual.HdrAE.GainValue[0] = 1.0f; /*sframe gain = 1x*/
     expSwAttr.stManual.HdrAE.TimeValue[0] = 0.002f; /*sframe time = 1/500s*/
     expSwAttr.stManual.HdrAE.GainValue[1] = 2.0f; /*mframe gain = 2x*/
@@ -409,8 +414,14 @@ luckfox_mpi::~luckfox_mpi()
     LOGD("deleting luckfox mpi handle");
     //TODO:proper cleanup
     if(enabled_flags.stream_locked.load() == true){
-        rk_res = RK_MPI_VENC_ReleaseStream(mpi_ctx.video_encoder.s32ChnId,&pstStream);
+        rk_res = RK_MPI_VENC_ReleaseStream(mpi_ctx.video_encoder.s32ChnId,pstStream);
         LOGD("releasing stream in cleanup. res:%d",rk_res);
+    }
+    if(pstPack){
+        free(pstPack);
+    }
+    if(pstStream){
+        free(pstStream);
     }
     if(enabled_flags.vi_bind_venc && rk_res == RK_SUCCESS){
         MPP_CHN_S vin = {.enModId = RK_ID_VI,
@@ -539,16 +550,30 @@ uint8_t* luckfox_mpi::venc_get_stream(bool restart,size_t *stream_len,uint64_t* 
             LOGW("failed to restart venc");
         }
     }
+    if(!pstStream){
+        pstStream = (VENC_STREAM_S*)aligned_alloc(16,sizeof(VENC_STREAM_S));
+        if(!pstStream){
+            LOGE("failed to allocate pstStream for venc");
+            return NULL;
+        }
+    }
+    if(!pstPack){
+        pstPack = (VENC_PACK_S*)aligned_alloc(16,sizeof(VENC_PACK_S));
+        if(!pstPack){
+            LOGE("failed to allocate pstPack for venc");
+            return NULL;
+        }
+    }
     memset(&pstStream,0,sizeof(pstStream));
     memset(&pstPack,0,sizeof(pstPack));
-    pstStream.pstPack = &pstPack;
-    rk_result = RK_MPI_VENC_GetStream(mpi_ctx.video_encoder.s32ChnId,&pstStream,120);
+    pstStream->pstPack = pstPack;
+    rk_result = RK_MPI_VENC_GetStream(mpi_ctx.video_encoder.s32ChnId,pstStream,120);
     if(rk_result == RK_SUCCESS){
         enabled_flags.stream_locked.store(true);
-        stream_ptr = (uint8_t*)(RK_MPI_MB_Handle2VirAddr(pstStream.pstPack->pMbBlk));
+        stream_ptr = (uint8_t*)(RK_MPI_MB_Handle2VirAddr(pstStream->pstPack->pMbBlk));
         if(stream_ptr){
-            *stream_len = pstStream.pstPack->u32Len;
-            *timestamp = pstStream.pstPack->u64PTS;
+            *stream_len = pstStream->pstPack->u32Len;
+            *timestamp = pstStream->pstPack->u64PTS;
             return stream_ptr;
         }else{
             return NULL;
@@ -562,7 +587,7 @@ uint8_t* luckfox_mpi::venc_get_stream(bool restart,size_t *stream_len,uint64_t* 
 bool luckfox_mpi::venc_release_stream(){
     int32_t rk_result = 0;
     if(enabled_flags.stream_locked.load() == true){
-        rk_result = RK_MPI_VENC_ReleaseStream(mpi_ctx.video_encoder.s32ChnId,&pstStream);
+        rk_result = RK_MPI_VENC_ReleaseStream(mpi_ctx.video_encoder.s32ChnId,pstStream);
         enabled_flags.stream_locked.store(false);
         return rk_result == RK_SUCCESS;
     }else{
@@ -597,13 +622,13 @@ bool luckfox_mpi::venc_restart()
     init_video_encoder(mpi_ctx.video_encoder.stChnAttr.stVencAttr.enType,
     mpi_ctx.video_encoder.stChnAttr.stVencAttr.u32PicWidth,
     mpi_ctx.video_encoder.stChnAttr.stVencAttr.u32PicHeight);
-    return start_video_encoder();   
+    return start_video_encoder(mpi_ctx.osd_enable);   
 }
 
 
 /// @brief must be called after init_video_encoder and before venc_get_stream
 /// @return false on fail
-bool luckfox_mpi::start_video_encoder(){
+bool luckfox_mpi::start_video_encoder(bool osd_enable){
     VENC_RECV_PIC_PARAM_S stRecvParam;
     memset(&stRecvParam,0,sizeof(stRecvParam));
     stRecvParam.s32RecvPicNum = -1;
@@ -615,7 +640,19 @@ bool luckfox_mpi::start_video_encoder(){
 		return false;
 	}
     enabled_flags.venc_start_rcv = true;
+    
     bool res = bind_vin_venc();
     enabled_flags.vi_bind_venc = res;
     return res;
+}
+bool luckfox_mpi::vi_osd()
+{
+    //import buffer from vi to rga
+    rga_buffer_t osd_txt;
+    rga_buffer_t bg_image;
+    rga_buffer_t src;
+    im_rect osd_rect;
+    im_osd_t osd_config;
+    IM_STATUS res = imosd(osd_txt,bg_image,osd_rect,&osd_config,true,NULL);
+    return false;
 }

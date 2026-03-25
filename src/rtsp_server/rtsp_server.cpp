@@ -14,6 +14,7 @@
 #include "luckfox_mpi.hpp"
 #include "generic_log.h"
 #include "config.h"
+#include "osd.hpp"
 static volatile bool    s_spnet_loop;
 static volatile int32_t s_client_count;
 static std::atomic<bool>got_sig_f = {false};
@@ -25,10 +26,10 @@ static const char* archive_file_path = "/mnt/sdcard/";
 static const uint32_t sc3336_width = CONF_SENSOR_WIDTH;
 static const uint32_t sc3336_height= CONF_SENSOR_HEIGHT;
 static const rk_aiq_working_mode_t sc3336_hdr_mode = CONF_HDR_MODE;
-
+static const std::string font_file_path = CONF_OSD_FONT_PATH;
 void SendFrameThread(xop::RtspServer* rtsp_server, xop::MediaSessionId session_id, luckfox_mpi* mpi_handle)
 {
-    mpi_handle->start_video_encoder();
+    mpi_handle->start_video_encoder(CONF_OSD_ENABLE);
     while(!got_sig_f.load())
     {
         if(s_spnet_loop){
@@ -76,6 +77,9 @@ void signal_handler(int sig)
         LOGD("pthread_cond_signal result: %d", result);
     }
 }
+
+
+
 int main(int argc, char **argv)
 {	
     got_sig_f.store(false);
@@ -84,18 +88,25 @@ int main(int argc, char **argv)
     signal(SIGTERM, signal_handler);
     signal(SIGQUIT, signal_handler);
     signal(SIGKILL, signal_handler);
-    std::system("RkLunch-stop.sh"); 
-    std::unique_ptr<luckfox_mpi> luckfox_mpi_handle(new luckfox_mpi(aiq_file_path));
-    luckfox_mpi* mpi_handle = luckfox_mpi_handle.get();
-    mpi_handle->init_video_in(sc3336_hdr_mode,
+    std::system("RkLunch-stop.sh");
+    luckfox_mpi mpi_handle(aiq_file_path);
+    mpi_handle.init_video_in(sc3336_hdr_mode,
                                     30,sc3336_width,sc3336_height);
-    mpi_handle->init_video_encoder(RK_VIDEO_ID_HEVC,sc3336_width,sc3336_height);
+    mpi_handle.init_video_encoder(RK_VIDEO_ID_HEVC,sc3336_width,sc3336_height);
     std::string ip = CONF_IP_ADDR;
 	std::string rtsp_url = CONF_RTSP_PATH;
 
 	std::shared_ptr<xop::EventLoop> event_loop(new xop::EventLoop());
 	std::shared_ptr<xop::RtspServer> server = xop::RtspServer::Create(event_loop.get());
+    osd::text_osd osd_handle(32);
     
+    osd_handle.load_ttf_file(font_file_path);
+    std::vector<uint8_t>pixel_buffer(1024,0);
+    osd::bmp_resolution resolution {0};
+    bool res_render = osd_handle.render_text_rgba8888("test text 1234:/",pixel_buffer,resolution);
+    LOGI("result reneder text:%d,width:%d,height%d",res_render,resolution.width,resolution.height);
+    res_render = osd_handle.save_rgba8888_to_bmp("/mnt/sdcard/test.bmp",pixel_buffer,resolution);
+    LOGI("res bmp write:%d",res_render);
 	if (!server->Start(ip, 554)) {
 		return -1;
 	}
@@ -113,7 +124,7 @@ int main(int argc, char **argv)
         
 	xop::MediaSessionId session_id = server->AddSession(session); 
     LOGD("rtsp_server session id:%d",session_id);    
-	std::thread thread(SendFrameThread, server.get(), session_id, luckfox_mpi_handle.get());
+	std::thread thread(SendFrameThread, server.get(), session_id, &mpi_handle);
 	thread.detach();
 
     pthread_mutex_lock(&s_main_lock);

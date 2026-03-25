@@ -14,6 +14,7 @@ CXXFLAGS += -I./src/3rdpart
 CXXFLAGS += -I./src/bsalgo
 CXXFLAGS += -I./src/net
 CXXFLAGS += -I./src/xop
+CXXFLAGS += -I./src/osd
 CXXFLAGS += -I./src/luckfox_mpi
 CXXFLAGS += -I./src/generic_log
 #Rockchip libs
@@ -51,6 +52,9 @@ $(OBJ_DIR)/%.o: ./src/luckfox_mpi/%.cpp
 $(OBJ_DIR)/%.o: ./src/generic_log/%.c
 	$(CXX) -c $(CXXFLAGS) $< -o $@
 
+$(OBJ_DIR)/%.o: ./src/osd/%.cpp
+	$(CXX) -c $(CXXFLAGS) $< -o $@
+
 CXXFILES0   = $(notdir $(wildcard ./src/net/*.cpp))
 CXXOBJS0    = $(patsubst %.cpp, $(OBJ_DIR)/%.o, $(CXXFILES0))
 
@@ -69,7 +73,10 @@ CXXOBJS8    = $(patsubst %.cpp, $(OBJ_DIR)/%.o, $(CXXFILES8))
 CXXFILES9   = $(notdir $(wildcard ./src/generic_log/*.c))
 CXXOBJS9    = $(patsubst %.c, $(OBJ_DIR)/%.o, $(CXXFILES9))
 
-$(LIB_DIR)/$(TARGET0): $(CXXOBJS0) $(CXXOBJS1) $(CXXOBJS2) $(CXXOBJS3) $(CXXOBJS8) $(CXXOBJS9)
+CXXFILES10   = $(notdir $(wildcard ./src/osd/*.cpp))
+CXXOBJS10    = $(patsubst %.cpp, $(OBJ_DIR)/%.o, $(CXXFILES10))
+
+$(LIB_DIR)/$(TARGET0): $(CXXOBJS0) $(CXXOBJS1) $(CXXOBJS2) $(CXXOBJS3) $(CXXOBJS8) $(CXXOBJS9) $(CXXOBJS10)
 	$(CXX) $^ -o $@ $(LDFLAGS) $(LDLIBS)
 
 

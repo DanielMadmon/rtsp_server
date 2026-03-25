@@ -7,6 +7,6 @@
 #define CONF_HDR_MODE RK_AIQ_WORKING_MODE_NORMAL
 #define CONF_IP_ADDR "127.0.0.1"
 #define CONF_RTSP_PATH "rtsp://" CONF_IP_ADDR ":554/live"
-
-
+#define CONF_OSD_ENABLE 1
+#define CONF_OSD_FONT_PATH "/oem/usr/share/simsun_en.ttf"
 #endif
