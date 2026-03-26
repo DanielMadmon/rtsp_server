@@ -3,7 +3,7 @@
 #include "stb_truetype.h"
 #include <string>
 #include <vector>
-
+#include "acetimec/src/acetimec.h"
 
 namespace osd{
 
@@ -26,4 +26,6 @@ namespace osd{
             stbtt_fontinfo font_info = {0};   
             stbrp_context pack_ctx;
     };
+
+    std::string get_local_time(AtcTimeZone& tz);
 }

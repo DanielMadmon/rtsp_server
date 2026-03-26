@@ -17,6 +17,7 @@ CXXFLAGS += -I./src/xop
 CXXFLAGS += -I./src/osd
 CXXFLAGS += -I./src/luckfox_mpi
 CXXFLAGS += -I./src/generic_log
+CXXFLAGS += -I./src/acetimec/src
 #Rockchip libs
 RKLIBS_ROOT = ./rk_libs
 RKLIBS_INCLUDE := $(shell find $(RKLIBS_ROOT) -type d)
@@ -26,11 +27,11 @@ INC_FLAGS := $(addprefix -I,$(RKLIBS_INCLUDE))
 CXXFLAGS += -I$(INC_FLAGS)
 
 RKLIBS_LIB = $(RKLIBS_ROOT)/uclibc
-LDLIBS += -L$(RKLIBS_LIB) -lrockit -lrockchip_mpp -lrkaiq -lrga 
+LDLIBS += -L$(RKLIBS_LIB) -lrockit -lrockchip_mpp -lrkaiq -lrga ./src/acetimec/src/acetimec.a
 
 CXXFLAGS += -Og -g -fPIC -pthread -fmessage-length=0 -std=c++14 -Wall -Werror=format
 CXXFLAGS += -DDYN_LOG  -DISP_HW_V30 -DRKPLATFORM -DUAPI2 -DRTSP_DEBUG=0
-LDFLAGS = -ldl -lm -lrt -lpthread
+LDFLAGS = -ldl -lm -lrt -lpthread 
 
 $(shell mkdir -p $(LIB_DIR) $(OBJ_DIR))
 

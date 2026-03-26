@@ -14,7 +14,7 @@
 *   usually the for last module in the chain the channel will be accessed 
 *   manually. 
 *   sc3336 pixel format : RK_FMT_RGB_BAYER_SBGGR_10BPP
-*   flow : vin->vpss(OSD overlay & format conversion)->venc->rtsp in.
+*   flow : vin->rgs(OSD overlay)->venc->rtsp in.
 */
 struct _luckfox_mpi_ctx;
 struct _luckfox_mpi_vi_ctx;

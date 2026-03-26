@@ -143,3 +143,25 @@ bool osd::text_osd::save_rgba_to_bmp(const std::string &filename, std::vector<ui
     ret = stbi_write_bmp(filename.c_str(),res.width,res.height,4,&buffer[0]);
     return ret == 1;
 }
+
+
+
+std::string osd::get_local_time(AtcTimeZone& tz){
+    AtcZonedDateTime zdt;
+    time_t rawtime;
+    char time_str[80] = {0};
+    AtcStringBuffer atc_buf = {
+        .p = time_str,
+        .capacity = sizeof(time_str),
+        .size = 0
+    };
+    time(&rawtime);
+    atc_zoned_date_time_from_epoch_seconds(&zdt, rawtime, &tz);
+    atc_zoned_date_time_print(&atc_buf,&zdt);
+    std::string ret_str = std::string(time_str);
+    size_t idx = ret_str.find('+');
+    if(idx != std::string::npos){
+        ret_str.erase(idx);
+    }
+    return ret_str;
+}

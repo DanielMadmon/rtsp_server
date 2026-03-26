@@ -1,3 +1,6 @@
 [submodule "src/generic_log"]
 	path = src/generic_log
 	url = https://github.com/DanielMadmon/generic_log.git
+[submodule "src/acetimec"]
+	path = src/acetimec
+	url = https://github.com/DanielMadmon/acetimec

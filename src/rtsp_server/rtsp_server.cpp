@@ -4,6 +4,8 @@
 #include <thread>
 #include <memory>
 #include <iostream>
+#include <time.h>
+#include <iomanip>
 #include <string>
 #include "xop/RtspServer.h"
 #include "net/Timer.h"
@@ -15,13 +17,14 @@
 #include "generic_log.h"
 #include "config.h"
 #include "osd.hpp"
+
 static volatile bool    s_spnet_loop;
 static volatile int32_t s_client_count;
 static std::atomic<bool>got_sig_f = {false};
 static volatile bool restart = false;
 static pthread_mutex_t  s_main_lock;
 static pthread_cond_t   s_frame_cond;
-static const char* aiq_file_path = CONF_AIQ_FILES_PATH;
+static const std::string aiq_file_path = CONF_AIQ_FILES_PATH;
 static const uint32_t sc3336_width = CONF_SENSOR_WIDTH;
 static const uint32_t sc3336_height= CONF_SENSOR_HEIGHT;
 static const rk_aiq_working_mode_t sc3336_hdr_mode = CONF_HDR_MODE;
@@ -103,7 +106,12 @@ int main(int argc, char **argv)
     std::vector<uint8_t>pixel_buffer(4096);
     osd::bmp_resolution resolution =  {0};
     auto start = std::chrono::high_resolution_clock::now();
-    bool res_render = osd_handle.render_text_rgba("test text 1234:/",pixel_buffer,resolution);
+    AtcZoneProcessor processor;  // Static processor per timezone
+    AtcTimeZone tz = {&kAtcZonedballZoneAsia_Jerusalem, &processor};
+    atc_processor_init(&processor);
+    atc_set_current_epoch_year(1970);
+    std::string time_str = osd::get_local_time(tz);
+    bool res_render = osd_handle.render_text_rgba(time_str,pixel_buffer,resolution);
     auto elapsed = std::chrono::high_resolution_clock::now() - start;
     long long microseconds = std::chrono::duration_cast<std::chrono::microseconds>(
         elapsed).count();
