@@ -4,6 +4,8 @@
 #include <pthread.h>
 #include <atomic>
 #include <string>
+#include "im2d.h"
+#include "osd.hpp"
 /*
 * RK_API:
 *   *_channel = module output/input interface. 
@@ -14,12 +16,13 @@
 *   usually the for last module in the chain the channel will be accessed 
 *   manually. 
 *   sc3336 pixel format : RK_FMT_RGB_BAYER_SBGGR_10BPP
-*   flow : vin->rgs(OSD overlay)->venc->rtsp in.
+*   flow : vin->rga(OSD overlay)->venc->rtsp in.
 */
 struct _luckfox_mpi_ctx;
 struct _luckfox_mpi_vi_ctx;
 struct _luckfox_mpi_vpss_ctx;
 struct _luckfox_mpi_venc_ctx;
+
 
 class luckfox_mpi
 {
@@ -35,11 +38,17 @@ public:
     bool bind_vin_vpss();
     bool bind_vin_venc();
     bool bind_vpss_venc();
+    bool osd_init();
+    bool osd_run(std::vector<uint8_t>& osd_rgba_pixels,
+                 osd::bmp_resolution& size,
+                 osd::flag& update_pixel_f,
+                 osd::flag& stop_f);
     ~luckfox_mpi();
 
 private:
     bool init_vi();
-    bool vi_osd();
+    MB_BLK mmz_alloc(size_t size);
+    void mmz_free(void* ptr);
     const rk_aiq_wb_gain_t gs_wb_gain = {2.083900, 1.000000, 1.000000, 2.018500};
     const int32_t vi_buf_count = 1; 
     int32_t vi_dev_id = 0;
@@ -101,5 +110,19 @@ private:
     VENC_STREAM_S pstStream = {0};
     VENC_PACK_S pstPack = {0};
     _luckfox_mpi_ctx mpi_ctx;
+
+    struct{
+        rga_buffer_handle_t vi_rgba_buf_handle = 0;
+        rga_buffer_handle_t venc_yuv_buf_handle = 0;
+        rga_buffer_t vi_rga_buf = {0};
+        rga_buffer_t venc_rga_buf = {0};
+        MB_BLK cvt_image_blk = nullptr;
+        MB_BLK venc_image_blk = nullptr;
+        uint64_t cvt_image_phy_address = 0;
+        uint64_t venc_image_phy_address = 0;
+        const RgaSURF_FORMAT rgba_format = RgaSURF_FORMAT::RK_FORMAT_RGBA_8888;
+        const RgaSURF_FORMAT yuv_format = RgaSURF_FORMAT::RK_FORMAT_YCbCr_420_SP;
+    }osd_handles = {};
    
 };
+

@@ -4,9 +4,12 @@
 #include <string>
 #include <vector>
 #include "acetimec/src/acetimec.h"
+#include <atomic>
+#include <vector>
+
 
 namespace osd{
-
+    
     typedef struct{
         int32_t width;
         int32_t height;
@@ -19,13 +22,19 @@ namespace osd{
             void set_font_size(uint32_t size);
             bool load_ttf_file(const std::string& ttf_file_path);
             bool render_text_rgba(const std::string& text,std::vector<uint8_t>& buffer,bmp_resolution& res);
-            bool save_rgba_to_bmp(const std::string& filename, std::vector<uint8_t>& buffer,bmp_resolution& res);
         private:
             std::vector<uint8_t> ttf_file;
             uint32_t st_font_size = 16;  
             stbtt_fontinfo font_info = {0};   
             stbrp_context pack_ctx;
     };
-
+    bool save_rgba_to_bmp(const char* filename, uint8_t* buffer,bmp_resolution& res);
     std::string get_local_time(AtcTimeZone& tz);
+
+    typedef struct flag_atomic{
+        std::atomic<bool> flag = {false};
+        void wait_update();
+        void clear_update();
+        void set_update();
+    }flag;
 }

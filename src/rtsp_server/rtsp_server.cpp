@@ -106,18 +106,24 @@ int main(int argc, char **argv)
     std::vector<uint8_t>pixel_buffer(4096);
     osd::bmp_resolution resolution =  {0};
     auto start = std::chrono::high_resolution_clock::now();
-    AtcZoneProcessor processor;  // Static processor per timezone
+
+    AtcZoneProcessor processor;  
     AtcTimeZone tz = {&kAtcZonedballZoneAsia_Jerusalem, &processor};
     atc_processor_init(&processor);
     atc_set_current_epoch_year(1970);
+
     std::string time_str = osd::get_local_time(tz);
     bool res_render = osd_handle.render_text_rgba(time_str,pixel_buffer,resolution);
+    osd::flag flag_udpate;
+    flag_udpate.set_update();
+    osd::flag flag_stop;
+    mpi_handle.osd_run(pixel_buffer,resolution,flag_udpate,flag_stop);
     auto elapsed = std::chrono::high_resolution_clock::now() - start;
     long long microseconds = std::chrono::duration_cast<std::chrono::microseconds>(
         elapsed).count();
     LOGI("render time:%lld",microseconds);
     LOGI("result reneder text:%d,width:%d,height%d",res_render,resolution.width,resolution.height);
-    res_render = osd_handle.save_rgba_to_bmp("/mnt/sdcard/test.bmp",pixel_buffer,resolution);
+    res_render = osd::save_rgba_to_bmp("/mnt/sdcard/test.bmp",pixel_buffer.data(),resolution);
     LOGI("res bmp write:%d",res_render);
 	if (!server->Start(ip, 554)) {
 		return -1;

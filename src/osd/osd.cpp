@@ -137,10 +137,10 @@ void osd::text_osd::set_font_size(uint32_t size)
     st_font_size = size;
 }
 
-bool osd::text_osd::save_rgba_to_bmp(const std::string &filename, std::vector<uint8_t> &buffer,bmp_resolution& res)
+bool osd::save_rgba_to_bmp(const char* filename, uint8_t* buffer,bmp_resolution& res)
 {
     int ret = 0;
-    ret = stbi_write_bmp(filename.c_str(),res.width,res.height,4,&buffer[0]);
+    ret = stbi_write_bmp(filename,res.width,res.height,4,&buffer[0]);
     return ret == 1;
 }
 
@@ -165,3 +165,21 @@ std::string osd::get_local_time(AtcTimeZone& tz){
     }
     return ret_str;
 }
+
+
+void osd::flag::clear_update()
+{
+    flag.store(false,std::memory_order_release);
+}
+
+void osd::flag::set_update()
+{
+    flag.store(true,std::memory_order_relaxed);
+}
+
+
+void osd::flag::wait_update()
+{
+    while (!flag.load(std::memory_order_acquire)) {}
+}
+

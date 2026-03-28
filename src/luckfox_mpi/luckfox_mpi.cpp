@@ -3,6 +3,11 @@
 #include "generic_log.h"
 #include "im2d.hpp"
 #include <string>
+#include <fstream>
+#include "RgaUtils.h"
+#include "rk_mpi_mmz.h"
+#include "osd.hpp"
+
 #define RK_ALIGN(x, a) (((x) + (a)-1) & ~((a)-1))
 #define RK_ALIGN_2(x) RK_ALIGN(x, 2)
 
@@ -320,9 +325,9 @@ bool luckfox_mpi::init_vi()
     mpi_ctx.video_in.stChnAttr.stSize.u32Height = mpi_ctx.video_in.vi_height;
     mpi_ctx.video_in.stChnAttr.stSize.u32Width = mpi_ctx.video_in.vi_width;
     mpi_ctx.video_in.stChnAttr.stIspOpt.u32BufCount = vi_buf_count;
-    mpi_ctx.video_in.stChnAttr.stIspOpt.u32BufSize = mpi_ctx.video_in.vi_height * mpi_ctx.video_in.vi_width / 2;
+    mpi_ctx.video_in.stChnAttr.stIspOpt.u32BufSize = mpi_ctx.video_in.vi_height * mpi_ctx.video_in.vi_width * 3 / 2;
     mpi_ctx.video_in.stChnAttr.stIspOpt.enMemoryType = VI_V4L2_MEMORY_TYPE_DMABUF;
-    mpi_ctx.video_in.stChnAttr.u32Depth = 0;
+    mpi_ctx.video_in.stChnAttr.u32Depth = 3;
     mpi_ctx.video_in.stChnAttr.enPixelFormat = RK_FMT_YUV420SP;
     mpi_ctx.video_in.stChnAttr.stFrameRate.s32SrcFrameRate = mpi_ctx.video_in.vi_fps;
     mpi_ctx.video_in.stChnAttr.stFrameRate.s32DstFrameRate = mpi_ctx.video_in.vi_fps;
@@ -628,14 +633,287 @@ bool luckfox_mpi::start_video_encoder(bool osd_enable){
     enabled_flags.vi_bind_venc = res;
     return res;
 }
-bool luckfox_mpi::vi_osd()
+
+bool luckfox_mpi::osd_init()
 {
+    float cvt_bpp = get_bpp_from_format(osd_handles.rgba_format);
+    float venc_bpp = get_bpp_from_format(osd_handles.yuv_format);
+    size_t cvt_image_size = mpi_ctx.video_in.vi_width * mpi_ctx.video_in.vi_height * cvt_bpp;
+    size_t venc_image_size = mpi_ctx.video_in.vi_width * mpi_ctx.video_in.vi_height * venc_bpp;
+    bool ret = false;
+    osd_handles.cvt_image_blk = mmz_alloc(cvt_image_size);
+    if(!osd_handles.cvt_image_blk){
+        LOGE("failed to allocate mmz buffer for converted image (rgba8888)");
+        goto exit_err;
+    }
+    osd_handles.cvt_image_phy_address = RK_MPI_MMZ_Handle2PhysAddr(osd_handles.cvt_image_blk);
+    if(!osd_handles.cvt_image_phy_address){
+        LOGE("failed to get phy addres from cvt image block");
+        goto exit_err;
+    }
+    osd_handles.vi_rgba_buf_handle = importbuffer_physicaladdr(osd_handles.cvt_image_phy_address,
+                                                               cvt_image_size);
+    if(!osd_handles.vi_rgba_buf_handle){
+        LOGE("failed to import physical addr buffer vi to rga");
+        goto exit_err;
+    }
+    osd_handles.vi_rga_buf = wrapbuffer_handle(osd_handles.vi_rgba_buf_handle,
+                                                mpi_ctx.video_in.vi_width,
+                                                mpi_ctx.video_in.vi_height,
+                                                RgaSURF_FORMAT::RK_FORMAT_RGBA_8888);
+    
+    
+    osd_handles.venc_image_blk = mmz_alloc(venc_image_size);
+    if(!osd_handles.venc_image_blk){
+        LOGE("failed to allocate mmz block for venc");
+        goto exit_err;
+    }
+    osd_handles.venc_image_phy_address = RK_MPI_MMZ_Handle2PhysAddr(osd_handles.venc_image_blk);
+    if(!osd_handles.venc_image_phy_address){
+        LOGE("failed to get phy address from Venc mb blk");
+        goto exit_err;
+    }
+    osd_handles.venc_yuv_buf_handle = importbuffer_physicaladdr(osd_handles.venc_image_phy_address,
+                                                                venc_image_size);
+    if(!osd_handles.venc_yuv_buf_handle){
+        LOGE("failed to import rga venc buf with phy address");
+        goto exit_err;
+    }
+    osd_handles.venc_rga_buf = wrapbuffer_handle(osd_handles.venc_yuv_buf_handle,
+                                                mpi_ctx.video_in.vi_width,
+                                                mpi_ctx.video_in.vi_height,
+                                                osd_handles.yuv_format);
+    ret = true;
+    LOGD("rga init done");
+    goto exit_ok;
+    exit_err:
+        if(osd_handles.vi_rgba_buf_handle)
+            releasebuffer_handle(osd_handles.vi_rgba_buf_handle);
+        if(osd_handles.venc_yuv_buf_handle)
+            releasebuffer_handle(osd_handles.venc_yuv_buf_handle);
+        if(osd_handles.venc_image_blk)
+            mmz_free(osd_handles.venc_image_blk);
+        if(osd_handles.cvt_image_blk)
+            mmz_free(osd_handles.cvt_image_blk);
+        return ret;
+    exit_ok:
+        return ret;
+}
+
+/// @brief run osd thread.
+/// fetches buffer from vi -> converts yuv2rgb->osd blend->rgb2yuv->send to video encoder
+/// @param osd_rgba_pixels current osd rgba bitmap 
+/// @param size bmp size info struct
+/// @param update_pixel_f set when updating osd cleared by function.
+/// causes reimporting of buffer to rga with updated size and data 
+/// @param stop_f set when stopping the osd thread
+/// @return 
+bool luckfox_mpi::osd_run(std::vector<uint8_t>& osd_rgba_pixels,
+                          osd::bmp_resolution& size,
+                          osd::flag& update_pixel_f,
+                          osd::flag& stop_f)
+{
+    /**
+     * TODO:add extra vi channel?
+     * **/
+    bool ret = false;
+    IM_STATUS res;
+
+    //get vi frame
+    VIDEO_FRAME_INFO_S frame_info;
+    rga_buffer_handle_t cvt_image_buf_handle = 0;
+    rga_buffer_handle_t vi_img_buff_handle = 0; 
+    rga_buffer_handle_t osd_img_buf_handle = 0;
+    rga_buffer_handle_t venc_img_buf_handle = 0;
+    
+    rga_buffer_t vi_img_buf = {0};
+    rga_buffer_t cvt_image_buf = {0};
+    rga_buffer_t osd_img_buf = {0};
+    rga_buffer_t vecn_img_buf = {0};
+
+    int vi_buff_fd = 0;
+    size_t vi_buf_size = 0;
+    uint64_t cvt_image_phy_addr = 0;
+    uint64_t venc_image_phy_addr = 0;
+    size_t cvt_image_size = 0;
+    MB_BLK cvt_image_blk = nullptr;
+    MB_BLK venc_image_blk = nullptr;
+    int32_t result = 0;
+    im_rect osd_rect = {0};
+    im_osd_t osd_config = {0};
+    uint8_t* test_osd_buf = nullptr;
+    VIDEO_FRAME_INFO_S venc_frame_info = {0};
+    
+    std::fstream test_file("/mnt/sdcard/test_osd.yuv",std::ios::out | std::ios::binary);
+    memset(&frame_info,0,sizeof(frame_info));
+    result = RK_MPI_VI_GetChnFrame(0,mpi_ctx.video_in.s32ChnId,&frame_info,1000);
+    if(result != RK_SUCCESS || !frame_info.stVFrame.pMbBlk){
+        LOGE("failed to get vi channel frame");
+        goto exit;
+    }
+    LOGI("got vi channel frame,width:%d,height:%d",frame_info.stVFrame.u32Width,frame_info.stVFrame.u32Height);
+    //convert yuv420sp to rgba
+    cvt_image_size = mpi_ctx.video_in.vi_height * mpi_ctx.video_in.vi_width * 4; 
+    cvt_image_blk = mmz_alloc(cvt_image_size);
+    if(!cvt_image_blk){
+        LOGE("failed to allocate cvt_image_vec");
+        goto exit;
+    }
+    cvt_image_phy_addr = RK_MPI_MMZ_Handle2PhysAddr(cvt_image_blk);
+    
+    if(!cvt_image_phy_addr){
+        LOGE("failed to conver mpi handle to physical address");
+        goto exit;
+    }
+    cvt_image_buf_handle = importbuffer_physicaladdr(
+        cvt_image_phy_addr,
+        cvt_image_size);
+    if(!cvt_image_buf_handle){
+        LOGE("failed to import cvt image buf");
+        goto exit;
+    }
+    cvt_image_buf = wrapbuffer_handle(cvt_image_buf_handle,
+                                                   mpi_ctx.video_in.vi_width,
+                                                   mpi_ctx.video_in.vi_height,
+                                                   RgaSURF_FORMAT::RK_FORMAT_RGBA_8888);
     //import buffer from vi to rga
-    rga_buffer_t osd_txt;
-    rga_buffer_t bg_image;
-    rga_buffer_t src;
-    im_rect osd_rect;
-    im_osd_t osd_config;
-    IM_STATUS res = imosd(osd_txt,bg_image,osd_rect,&osd_config,true,NULL);
-    return false;
+    vi_buff_fd = RK_MPI_MMZ_Handle2Fd(frame_info.stVFrame.pMbBlk);
+    vi_buf_size = frame_info.stVFrame.u32Width * frame_info.stVFrame.u32Height * 3 / 2;
+    LOGI("vi buf fd:%d",vi_buff_fd);
+    vi_img_buff_handle = importbuffer_fd(
+        vi_buff_fd,
+        vi_buf_size
+    );
+    if(!vi_img_buff_handle){
+        LOGE("failed to import vi buff_fd");
+        goto exit;
+    }
+    vi_img_buf = wrapbuffer_handle(vi_img_buff_handle,
+                                    frame_info.stVFrame.u32Width,
+                                    frame_info.stVFrame.u32Height,
+                                    RgaSURF_FORMAT::RK_FORMAT_YCbCr_420_SP);
+    
+    
+    res = imcheck(vi_img_buf,cvt_image_buf,{},{});
+    if(res != IM_STATUS::IM_STATUS_NOERROR){
+        LOGE("imcheck failed for (vi_img_buf,cvt_img_buf). error:%s",imStrError(res));
+    }
+    res = imcvtcolor(vi_img_buf,cvt_image_buf,
+                    RgaSURF_FORMAT::RK_FORMAT_YCbCr_420_SP,
+                    RgaSURF_FORMAT::RK_FORMAT_RGBA_8888,
+                    IM_YUV_TO_RGB_BT601_LIMIT,1,nullptr);
+    if(res != IM_STATUS::IM_STATUS_SUCCESS){
+        LOGE("failed to convert vi buff color. res:%s",imStrError(res));
+        goto exit;
+    }
+    //import osd buffer to rga
+    osd_img_buf_handle = importbuffer_virtualaddr(osd_rgba_pixels.data(),osd_rgba_pixels.size());
+    if(!osd_img_buf_handle){
+        LOGE("failed to import osd image buffer to rga");
+        goto exit;
+    }
+    osd_img_buf = wrapbuffer_handle(osd_img_buf_handle,
+                                    size.width,
+                                    size.height,
+                                    RgaSURF_FORMAT::RK_FORMAT_RGBA_8888);
+    osd_rect.x = 16;
+    osd_rect.y = 16;
+    osd_rect.width = size.width;
+    osd_rect.height = size.height;
+      osd_config.osd_mode = IM_OSD_MODE_STATISTICS | IM_OSD_MODE_AUTO_INVERT;
+
+    osd_config.block_parm.width_mode = IM_OSD_BLOCK_MODE_NORMAL;
+    osd_config.block_parm.width = osd_rect.width;
+    osd_config.block_parm.block_count = 1;
+    osd_config.block_parm.background_config = IM_OSD_BACKGROUND_DEFAULT_BRIGHT;
+    osd_config.block_parm.direction = IM_OSD_MODE_HORIZONTAL;
+    osd_config.block_parm.color_mode = IM_OSD_COLOR_PIXEL;
+
+    osd_config.invert_config.invert_channel = IM_OSD_INVERT_CHANNEL_COLOR;
+    osd_config.invert_config.flags_mode = IM_OSD_FLAGS_EXTERNAL;
+    osd_config.invert_config.invert_flags = 0x000000000000002a;
+    osd_config.invert_config.flags_index = 1;
+    osd_config.invert_config.threash = 40;
+    osd_config.invert_config.invert_mode = IM_OSD_INVERT_USE_SWAP;
+
+    res = imcheck(osd_img_buf,cvt_image_buf,{},osd_rect);
+    if(res != IM_STATUS::IM_STATUS_NOERROR){
+        LOGE("imcheck failed for osd. error:%s",imStrError(res));
+        goto exit;
+    }
+    res = imosd(osd_img_buf,cvt_image_buf,osd_rect,&osd_config,1,nullptr);
+    if(res != IM_STATUS::IM_STATUS_SUCCESS){
+        LOGE("imosd failed: error:%s",imStrError(res));
+        goto exit;
+    }
+
+    // TODO: convert back to RgaSURF_FORMAT::RK_FORMAT_YCbCr_420_SP and send to venc
+    venc_image_blk = mmz_alloc(vi_buf_size);
+    if(!venc_image_blk){
+        LOGE("failed to allocate venc image blk");
+        goto exit;
+    }
+    venc_image_phy_addr = RK_MPI_MMZ_Handle2PhysAddr(venc_image_blk);
+    if(!venc_image_phy_addr){
+        LOGE("failed to get phy address from venc_image_blk");
+        goto exit;
+    }
+    venc_img_buf_handle = importbuffer_physicaladdr(venc_image_phy_addr,vi_buf_size);
+    if(!venc_img_buf_handle){
+        LOGE("failed to import venc_image_phyaddress");
+        goto exit;
+    }
+    vecn_img_buf = wrapbuffer_handle(venc_img_buf_handle,
+                                     mpi_ctx.video_in.vi_width,
+                                     mpi_ctx.video_in.vi_height,
+                                     RgaSURF_FORMAT::RK_FORMAT_YCbCr_420_SP);
+    res = imcvtcolor(cvt_image_buf,vecn_img_buf,
+                    RgaSURF_FORMAT::RK_FORMAT_RGBA_8888,
+                    RgaSURF_FORMAT::RK_FORMAT_YCbCr_420_SP,
+                    IM_RGB_TO_YUV_BT601_LIMIT,
+                    1,nullptr);
+    if(res != IM_STATUS::IM_STATUS_SUCCESS){
+        LOGE("failed to cvt image back to yuv420sp.error:%s",imStrError(res));
+        goto exit;
+    }
+    test_osd_buf = (uint8_t*) RK_MPI_MMZ_Handle2VirAddr(venc_image_blk);
+    test_file.write((char*)test_osd_buf,vi_buf_size);
+    memcpy(&venc_frame_info,&frame_info,sizeof(frame_info));
+    venc_frame_info.stVFrame.pMbBlk = venc_image_blk;
+    
+    exit:
+        if(frame_info.stVFrame.pMbBlk)
+            RK_MPI_VI_ReleaseChnFrame(0,mpi_ctx.video_in.s32ChnId,&frame_info);
+        if (cvt_image_blk)
+            mmz_free(cvt_image_blk);
+        if(venc_image_blk)
+            mmz_free(venc_image_blk);
+        if(cvt_image_buf_handle)
+            releasebuffer_handle(cvt_image_buf_handle);
+        if(vi_img_buff_handle)
+            releasebuffer_handle(vi_img_buff_handle);
+        if(osd_img_buf_handle)
+            releasebuffer_handle(osd_img_buf_handle);
+        if(venc_img_buf_handle)
+            releasebuffer_handle(venc_img_buf_handle);
+        return ret;
+}
+
+
+MB_BLK luckfox_mpi::mmz_alloc(size_t size)
+{
+    void* ret = nullptr;
+    int32_t res = 
+        RK_MPI_MMZ_Alloc(&ret,size,
+                        RK_MMZ_ALLOC_TYPE_CMA|RK_MMZ_SYNC_RW);
+        if(res != RK_SUCCESS){
+            LOGE("failed to allocate mmz block. error:%d",res);
+            return nullptr;
+        }
+    return ret;
+}
+
+void luckfox_mpi::mmz_free(void *ptr)
+{
+    RK_MPI_MMZ_Free(ptr);
 }
