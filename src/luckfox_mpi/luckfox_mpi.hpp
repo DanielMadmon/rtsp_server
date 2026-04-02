@@ -1,6 +1,6 @@
 #pragma once
 
-#include <sample_comm.h>
+#include "sample_comm.h"
 #include <pthread.h>
 #include <atomic>
 #include <string>
@@ -18,10 +18,10 @@
 *   sc3336 pixel format : RK_FMT_RGB_BAYER_SBGGR_10BPP
 *   flow : vin->rga(OSD overlay)->venc->rtsp in.
 */
-struct _luckfox_mpi_ctx;
-struct _luckfox_mpi_vi_ctx;
-struct _luckfox_mpi_vpss_ctx;
-struct _luckfox_mpi_venc_ctx;
+
+namespace lf_mpi {
+
+
 
 
 class luckfox_mpi
@@ -34,32 +34,27 @@ public:
     bool start_video_encoder(bool osd_enable);
     uint8_t* venc_get_stream(bool restart,size_t *stream_len,uint64_t* timestamp);
     bool venc_release_stream();
+    MB_BLK vi_get_frame(VIDEO_FRAME_INFO_S* out_frame_info);
+    bool vi_send_frame(VIDEO_FRAME_INFO_S& frame_info);
+    void vi_release_frame();
     bool venc_restart();
     bool bind_vin_vpss();
     bool bind_vin_venc();
     bool bind_vpss_venc();
     bool osd_init();
-    bool osd_run(std::vector<uint8_t>& osd_rgba_pixels,
+    void osd_deinit();
+    void osd_thread(std::vector<uint8_t>& osd_rgba_pixels,
                  osd::bmp_resolution& size,
-                 osd::flag& update_pixel_f,
+                 osd::flag& update_osd_f,
+                 osd::flag& stop_f);
+    void osd_run(std::vector<uint8_t>& osd_rgba_pixels,
+                 osd::bmp_resolution& size,
+                 osd::flag& update_osd_f,
                  osd::flag& stop_f);
     ~luckfox_mpi();
 
 private:
-    bool init_vi();
-    MB_BLK mmz_alloc(size_t size);
-    void mmz_free(void* ptr);
-    const rk_aiq_wb_gain_t gs_wb_gain = {2.083900, 1.000000, 1.000000, 2.018500};
-    const int32_t vi_buf_count = 1; 
-    int32_t vi_dev_id = 0;
-    const uint32_t vpss_max_width = 4096;
-    const uint32_t vpss_max_height= 4096;
-    int32_t channel_id = 0;
-    struct _luckfox_mpi_vi_ctx{
-        RK_BOOL bWrapIfEnable;
-        RK_BOOL bIfOpenEptz;
-        RK_BOOL bIfIspGroupInit;
-        RK_U32 u32BufferLine;
+    typedef struct {
         VI_DEV s32DevId;
         VI_PIPE u32PipeId;
         VI_CHN s32ChnId;
@@ -74,9 +69,10 @@ private:
         RK_U32 vi_fps;
         rk_aiq_sys_ctx_t* aiq_ctx;
         rk_aiq_static_info_t aiq_static_info;
-        bool b_vi_channel_en;
-   };    
-   struct _luckfox_mpi_vpss_ctx{
+        VIDEO_FRAME_INFO_S frame_info;
+    bool b_vi_channel_en;
+    }_luckfox_mpi_vi_ctx;
+    typedef struct {
         VPSS_GRP s32GrpId;
         VPSS_CHN s32ChnId;
         VPSS_GRP_ATTR_S stGrpVpssAttr;
@@ -84,21 +80,38 @@ private:
         VPSS_CHN_ATTR_S stVpssChnAttr;
         VIDEO_FRAME_INFO_S stChnFrameInfos;
         bool b_vpss_en;
-    };
-    struct _luckfox_mpi_venc_ctx{
+    }_luckfox_mpi_vpss_ctx;
+    typedef struct{
         VENC_RC_MODE_E enRcMode;
         VENC_CHN s32ChnId;
         VENC_CHN_ATTR_S stChnAttr;
         VENC_STREAM_S stFrame;
         bool b_venc_en;
-    };
+    }_luckfox_mpi_venc_ctx;
+    bool init_vi();
+    MB_BLK mmz_alloc(size_t size);
+    void mmz_free(void* ptr);
+    void osd_bmp_update_thread(osd::text_osd& osd_handle,
+                                AtcTimeZone& tz,
+                                std::vector<uint8_t>&pixel_buffer,
+                                osd::bmp_resolution& size,
+                                osd::flag& update_osd_f,
+                                osd::flag&stop_f);
+    im_osd_t get_osd_config(uint32_t width);
+    im_rect get_osd_rect(int32_t width,int32_t height);
+    const int32_t vi_buf_count = 1; 
+    int32_t vi_dev_id = 0;
+    const uint32_t vpss_max_width = 4096;
+    const uint32_t vpss_max_height= 4096;
+    int32_t channel_id = 0;   
+   
+    
     struct _luckfox_mpi_ctx{
         std::string rknn_path;
         _luckfox_mpi_vi_ctx video_in;
         _luckfox_mpi_vpss_ctx vpss;
         _luckfox_mpi_venc_ctx video_encoder;
         bool osd_enable;
-        SAMPLE_RGN_CTX_S rgn; //for OSD image modification
    };
    struct {
     bool vi_enabled;
@@ -118,11 +131,17 @@ private:
         rga_buffer_t venc_rga_buf = {0};
         MB_BLK cvt_image_blk = nullptr;
         MB_BLK venc_image_blk = nullptr;
+        MB_BLK osd_image_blk;
         uint64_t cvt_image_phy_address = 0;
         uint64_t venc_image_phy_address = 0;
+        bool init_done = false;
         const RgaSURF_FORMAT rgba_format = RgaSURF_FORMAT::RK_FORMAT_RGBA_8888;
         const RgaSURF_FORMAT yuv_format = RgaSURF_FORMAT::RK_FORMAT_YCbCr_420_SP;
+        const size_t MAX_OSD_WIDTH = 1024;
+        const size_t MAX_OSD_HEIGHT = 128;
     }osd_handles = {};
    
 };
 
+    
+}

@@ -7,6 +7,7 @@
 #include <sys/epoll.h>
 #include <errno.h>
 #endif
+#include <assert.h>
 
 using namespace xop;
 
@@ -86,7 +87,7 @@ bool EpollTaskScheduler::HandleEvent(int timeout)
 #if defined(__linux) || defined(__linux__) 
 	struct epoll_event events[512] = {0};
 	int num_events = -1;
-
+    assert(timeout >= 0);
 	num_events = epoll_wait(epollfd_, events, 512, timeout);
 	if(num_events < 0)  {
 		if(errno != EINTR) {

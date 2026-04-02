@@ -46,10 +46,10 @@ bool osd::text_osd::load_ttf_file(const std::string &ttf_file_path)
 }
 
 
-bool osd::text_osd::render_text_rgba(const std::string &text, std::vector<uint8_t> &buffer, bmp_resolution &res)
+bool osd::text_osd::render_text_rgba_noraml_alloc(const std::string &text, std::vector<uint8_t> &buffer, bmp_resolution &res)
 {
     
-    int res_stb = stbtt_InitFont(&font_info,&ttf_file[0],0);
+    int res_stb = stbtt_InitFont(&font_info,ttf_file.data(),0);
     if(!res_stb){
         LOGE("failed to initialize font.");
         return false;
@@ -146,17 +146,17 @@ bool osd::save_rgba_to_bmp(const char* filename, uint8_t* buffer,bmp_resolution&
 
 
 
-std::string osd::get_local_time(AtcTimeZone& tz){
+std::string osd::get_local_time(AtcTimeZone& tz,time_t& out_raw_time){
     AtcZonedDateTime zdt;
-    time_t rawtime;
     char time_str[80] = {0};
     AtcStringBuffer atc_buf = {
         .p = time_str,
         .capacity = sizeof(time_str),
         .size = 0
     };
-    time(&rawtime);
-    atc_zoned_date_time_from_epoch_seconds(&zdt, rawtime, &tz);
+    out_raw_time = 0;
+    time(&out_raw_time);
+    atc_zoned_date_time_from_epoch_seconds(&zdt, out_raw_time, &tz);
     atc_zoned_date_time_print(&atc_buf,&zdt);
     std::string ret_str = std::string(time_str);
     size_t idx = ret_str.find('+');
@@ -166,20 +166,41 @@ std::string osd::get_local_time(AtcTimeZone& tz){
     return ret_str;
 }
 
+void osd::init_local_time(const AtcZoneInfo* zone_info,AtcZoneProcessor* processor, AtcTimeZone *tz)
+{
+    *tz = {zone_info,processor};
+    atc_processor_init(processor);
+    atc_set_current_epoch_year(1970);
+}
 
-void osd::flag::clear_update()
+void osd::flag_atomic::clear_update()
 {
     flag.store(false,std::memory_order_release);
 }
 
-void osd::flag::set_update()
+void osd::flag_atomic::set_update()
 {
     flag.store(true,std::memory_order_relaxed);
 }
 
 
-void osd::flag::wait_update()
+void osd::flag_atomic::wait_update()
 {
     while (!flag.load(std::memory_order_acquire)) {}
 }
 
+void osd::flag_atomic::wait_clear()
+{
+    while(flag.load(std::memory_order_acquire)){}
+}
+
+bool osd::flag_atomic::is_clear()
+{
+    if(!flag.load(std::memory_order_release))
+        return true;
+    return false;
+}
+bool osd::flag_atomic::is_set()
+{
+    return flag.load(std::memory_order_release);
+}

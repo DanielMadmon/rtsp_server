@@ -101,7 +101,6 @@ void EventLoop::Loop()
 void EventLoop::Quit()
 {
 	std::lock_guard<std::mutex> locker(mutex_);
-
 	for (auto iter : task_schedulers_) {
 		iter->Stop();
 	}

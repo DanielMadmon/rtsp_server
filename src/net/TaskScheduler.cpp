@@ -35,25 +35,18 @@ TaskScheduler::~TaskScheduler()
 
 void TaskScheduler::Start()
 {
-#if defined(__linux) || defined(__linux__) 
-	signal(SIGPIPE, SIG_IGN);
-	signal(SIGQUIT, SIG_IGN);
-	signal(SIGUSR1, SIG_IGN);
-	signal(SIGTERM, SIG_IGN);
-	signal(SIGKILL, SIG_IGN);
-#endif     
-	is_shutdown_ = false;
-	while (!is_shutdown_) {
+	while (!is_shutdown_.load(std::memory_order_release)) {
 		this->HandleTriggerEvent();
 		this->timer_queue_.HandleTimerEvent();
 		int64_t timeout = this->timer_queue_.GetTimeRemaining();
-		this->HandleEvent((int)timeout);
+		int32_t timeout_fix = (int32_t)(timeout >= 0 && timeout < INT32_MAX) ? timeout : 1;
+		this->HandleEvent(timeout_fix);
 	}
 }
 
 void TaskScheduler::Stop()
 {
-	is_shutdown_ = true;
+	is_shutdown_.store(true,std::memory_order_acquire);
 	char event = kTriggetEvent;
 	wakeup_pipe_->Write(&event, 1);
 }
