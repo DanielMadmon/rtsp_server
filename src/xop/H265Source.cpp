@@ -202,8 +202,10 @@ bool H265Source::HandleFrame(MediaChannelId channel_id, AVFrame frame)
 void H265Source::GetTimestamp(struct timeval* tv, uint32_t* ts)
 {
 
-    uint32_t timestamp;
     gettimeofday(tv, NULL);
-    timestamp   = (tv->tv_sec + tv->tv_usec/1000000.0)*90000 + 0.5; //90khz sound
-    *ts         = htonl(timestamp);
+	uint64_t rtp_ts =
+		(uint64_t)tv->tv_sec * 90000ULL +
+		((uint64_t)tv->tv_usec * 90000ULL + 500000ULL) / 1000000ULL;
+
+    *ts = htonl((uint32_t)rtp_ts);
 }

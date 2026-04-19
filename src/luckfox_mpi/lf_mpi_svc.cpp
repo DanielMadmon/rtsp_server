@@ -513,7 +513,6 @@ void lf_mpi_svc::send_rtsp_frame_thread(send_rtsp_frame_thread_ctx *thread_ctx)
             continue;
         }
         svc->idr_reset.store(false,memory_order_set);
-
         video_frame.size = data_len;
         ///TODO:find a way to use a preallocated buffer.
         video_frame.buffer.reset(new uint8_t[video_frame.size]);

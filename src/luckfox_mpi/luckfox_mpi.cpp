@@ -613,7 +613,7 @@ void luckfox_mpi::vi_release_frame()
 
 bool luckfox_mpi::venc_restart()
 {
-    int32_t rk_result = -1;
+    int32_t rk_result = 0;
     if(enabled_flags.vi_bind_venc && !mpi_ctx.osd_enable){
         MPP_CHN_S vin = {.enModId = RK_ID_VI,
                             .s32DevId = mpi_ctx.video_in.s32DevId,
