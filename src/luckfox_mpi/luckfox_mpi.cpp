@@ -152,7 +152,6 @@ bool luckfox_mpi::init_video_encoder(RK_CODEC_ID_E codec,uint32_t width,uint32_t
         LOGE("failed to set Lambda or AntiRing or AntiLine or MotionDeblurStrength");
         return false;
     }
-    
     return true;
 }
 static XCamReturn aiq_error_cb(rk_aiq_err_msg_t* err_msg){
@@ -281,12 +280,7 @@ bool luckfox_mpi::init_vi()
         LOGE("failed to set isp attributes. error code %d", result);
         return false;
     }
-    result = RK_MPI_SYS_Init();
-    if(result != RK_SUCCESS){
-        LOGE("failed to initialize mpi_sys.\
-             line: %d,file:%s",__LINE__,__FILE__);
-    }
-    LOGD("RK_MPI_SYS_Init done.");
+    
     
     /*
     *4. set device attributes?? unclear why do we need to call this function if the API specifies
@@ -568,11 +562,11 @@ uint8_t* luckfox_mpi::venc_get_stream(bool restart,size_t *stream_len,uint64_t* 
             *timestamp = pstStream.pstPack->u64PTS;
             return stream_ptr;
         }else{
-            return NULL;
+            return nullptr;
         }
     }else{
         LOGE("failed to get video encoder stream. error code:%d",rk_result);
-        return NULL;
+        return nullptr;
     }
 }
 
@@ -599,8 +593,12 @@ MB_BLK luckfox_mpi::vi_get_frame(VIDEO_FRAME_INFO_S* out_frame_info)
     return nullptr;
 }
 
-bool lf_mpi::luckfox_mpi::vi_send_frame(VIDEO_FRAME_INFO_S &frame_info)
+/// @brief send frame to venc
+/// @param frame_info 
+/// @return 
+bool lf_mpi::luckfox_mpi::venc_send_frame(VIDEO_FRAME_INFO_S &frame_info)
 {
+    
     int32_t res = RK_MPI_VENC_SendFrame(mpi_ctx.video_encoder.s32ChnId,&frame_info,1000);
     return res == RK_SUCCESS;
 }
@@ -616,7 +614,7 @@ void luckfox_mpi::vi_release_frame()
 bool luckfox_mpi::venc_restart()
 {
     int32_t rk_result = -1;
-    if(enabled_flags.vi_bind_venc){
+    if(enabled_flags.vi_bind_venc && !mpi_ctx.osd_enable){
         MPP_CHN_S vin = {.enModId = RK_ID_VI,
                             .s32DevId = mpi_ctx.video_in.s32DevId,
                             .s32ChnId = mpi_ctx.video_in.s32ChnId};
@@ -624,6 +622,7 @@ bool luckfox_mpi::venc_restart()
                             .s32DevId = mpi_ctx.video_in.s32DevId,
                             .s32ChnId = mpi_ctx.video_encoder.s32ChnId};
 
+        
         rk_result = RK_MPI_SYS_UnBind(&vin,&venc_channel);
         LOGD("calling RK_MPI_SYS_UnBind vin->venc. res:%d",rk_result);
     }
@@ -656,13 +655,12 @@ bool luckfox_mpi::start_video_encoder(bool osd_enable){
 		return false;
 	}
     enabled_flags.venc_start_rcv = true;
-    bool res = false;
+    bool res = true;
     if(!osd_enable){
         res = bind_vin_venc();
-    }else{
-        res = osd_init();
     }
-    
+    mpi_ctx.osd_enable = osd_enable;
+    ///TODO:better flag name
     enabled_flags.vi_bind_venc = res;
     return res;
 }

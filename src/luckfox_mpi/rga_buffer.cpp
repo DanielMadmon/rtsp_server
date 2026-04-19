@@ -1,27 +1,27 @@
+#include <algorithm>
 #include "rga_buffer.hpp"
 #include "generic_log.h"
 #include "RgaUtils.h"
-
 
 rga_buf::rga_buffer::rga_buffer()
 {
 }
 
-bool rga_buf::rga_buffer::create_buffer(uint32_t width, uint32_t height, 
-                                        RgaSURF_FORMAT format, rga_buffer::rga_buf_addr_t address, 
+rga_buffer_handle_t rga_buf::rga_buffer::create_buffer(uint32_t width, uint32_t height,
+                                        RgaSURF_FORMAT format, rga_buffer::rga_buf_addr_t address,
                                         rga_buffer_t *out_buffer)
 {
     if(!out_buffer){
         LOGE("null passed to rga_buf::rga_buffer::create_buffer");
-        return false;
+        return 0;
     }
     if(current_handle_idx >= max_handles){
         LOGE("can't create rga buffer. max buffers count is %d",max_handles);
-        return true;
+        return 0;
     }
     if(width == 0 && height == 0){
         LOGE("rga buffer width and height can't both be zero");
-        return false;
+        return 0;
     }
    
     rga_buffer_handle_t handle = 0;
@@ -46,18 +46,25 @@ bool rga_buf::rga_buffer::create_buffer(uint32_t width, uint32_t height,
     }
     if(handle == 0){
         LOGE("failed to create rga buffer. importbuffer failed");
-        return false;
+        return 0;
     }
-    rga_buffer_handles[current_handle_idx] = handle;
-    current_handle_idx += 1;
+    rga_buffer_handles.push_back(handle);
     *out_buffer = wrapbuffer_handle(
         handle,
         width,
         height,
         format
     );
+    return handle;
+}
 
-    return true;
+void rga_buf::rga_buffer::release_buffer(rga_buffer_handle_t handle)
+{
+    auto f_res = std::find(rga_buffer_handles.begin(),rga_buffer_handles.end(),handle);
+    if(f_res != rga_buffer_handles.end()){
+        releasebuffer_handle(handle);
+        rga_buffer_handles.erase(f_res);
+    }
 }
 
 size_t rga_buf::rga_buffer::get_buffer_size(uint32_t width, uint32_t height, RgaSURF_FORMAT format)

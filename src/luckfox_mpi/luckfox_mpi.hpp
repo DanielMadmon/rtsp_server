@@ -35,7 +35,7 @@ public:
     uint8_t* venc_get_stream(bool restart,size_t *stream_len,uint64_t* timestamp);
     bool venc_release_stream();
     MB_BLK vi_get_frame(VIDEO_FRAME_INFO_S* out_frame_info);
-    bool vi_send_frame(VIDEO_FRAME_INFO_S& frame_info);
+    bool venc_send_frame(VIDEO_FRAME_INFO_S& frame_info);
     void vi_release_frame();
     bool venc_restart();
     bool bind_vin_vpss();

@@ -60,8 +60,12 @@ namespace osd{
                 }
                 res.width = width;
                 res.height = height;
-                buffer.resize(width * height * 4,0);
-                for (size_t idx = 0; idx < buffer.size(); idx++){
+                size_t new_buf_size = width * height * 4;
+                buffer.resize(new_buf_size,0);
+                for (size_t idx = 0; idx < new_buf_size; idx = idx + 4){
+                    buffer[idx] = 0;
+                    buffer[idx + 1] = 0;
+                    buffer[idx + 2] = 0;
                     buffer[idx + 3] = 255; //default alpha value
                 }
 
@@ -101,9 +105,9 @@ namespace osd{
                             py = dst_y + y;
                             if(px >= 0 && px < width && py >= 0 && py < height){
                                 out_buf_idx = (py * width + px) * 4;
-                                buffer[out_buf_idx] = 0;
-                                buffer[out_buf_idx + 1] = 0;
-                                buffer[out_buf_idx + 2] = 0;
+                                buffer[out_buf_idx] = 255;
+                                buffer[out_buf_idx + 1] = 255;
+                                buffer[out_buf_idx + 2] = 255;
                                 buffer[out_buf_idx + 3] = alpha; 
                             }
                         }//end x loop

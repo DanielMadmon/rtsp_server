@@ -3,7 +3,7 @@
 #include <cstdint>
 #include "rga.h"
 #include "im2d.h"
-#include <array>
+#include <vector>
 namespace rga_buf{
     class rga_buffer{
         
@@ -23,12 +23,15 @@ namespace rga_buf{
             }rga_buf_addr_t;
 
             rga_buffer();
-            bool create_buffer(
+            rga_buffer_handle_t create_buffer(
                 uint32_t width,
                 uint32_t height,
                 RgaSURF_FORMAT format,
                 rga_buf_addr_t addr,
                 rga_buffer_t* out_buffer
+            );
+            void release_buffer(
+                rga_buffer_handle_t handle
             );
             size_t get_buffer_size(
                 uint32_t width,
@@ -42,7 +45,7 @@ namespace rga_buf{
             uint32_t _width = 0;
             uint32_t height = 0;
             static inline constexpr size_t max_handles = 64;
-            rga_buffer_handle_t rga_buffer_handles[max_handles] = {0};
+            std::vector<rga_buffer_handle_t>rga_buffer_handles{};
             size_t current_handle_idx = 0;
     };
 }

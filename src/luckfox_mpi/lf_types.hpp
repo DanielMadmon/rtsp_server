@@ -6,6 +6,7 @@
 #include "mmz_alloc.hpp"
 #include <chrono>
 #include <memory>
+#include <functional>
 
 namespace lf_mpi{
     typedef std::atomic<bool> flag;
@@ -35,6 +36,9 @@ namespace lf_mpi{
         osd::bmp_resolution* pixel_buffer_size = nullptr;
         flag* update_osd_f = nullptr;
         flag* stop_flag = nullptr;
+        std::function<MB_BLK(luckfox_mpi&, VIDEO_FRAME_INFO_S*)> vi_get_frame = nullptr;
+        std::function<void(luckfox_mpi&)> vi_release_frame = nullptr;
+        std::function<bool(luckfox_mpi&, VIDEO_FRAME_INFO_S&)> venc_send_frame = nullptr;
     };
 
     typedef struct{
@@ -50,7 +54,7 @@ namespace lf_mpi{
         uint16_t port = 554;
         const AtcZoneInfo* timezone = &kAtcZonedballZoneAsia_Jerusalem;
         bool osd_enable = true;
-        uint32_t font_size = 16;
+        uint32_t font_size = 32;
         flag* stop_flag = nullptr;
     }luckfox_mpi_config;
 }

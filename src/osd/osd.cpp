@@ -79,9 +79,10 @@ bool osd::text_osd::render_text_rgba_noraml_alloc(const std::string &text, std::
     }
     res.width = width;
     res.height = height;
-    buffer.resize(width * height * 4,0);
-    for (size_t idx = 0; idx < buffer.size(); idx++){
-        buffer[idx + 3] = 255; //default alpha value
+    size_t buf_size = width * height * 4;
+    buffer.resize(buf_size);
+    for(size_t idx = 0; idx < buf_size; idx += 4){
+        buffer[idx + 3] = 255;//default alpha value
     }
 
     float y_baseline = ascent_px;

@@ -8,7 +8,7 @@ template<typename T>class mmz_alloc{
         typedef T value_type;
         mmz_alloc() noexcept {}
         T* allocate(std::size_t nb){
-            T* ptr = static_cast<T*>(mmz_allocate(nb));
+            T* ptr = static_cast<T*>(mmz_allocate(nb * sizeof(T)));
             if(ptr){
                 return into_virtual_address(ptr);
             }
