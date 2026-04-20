@@ -16,7 +16,7 @@ namespace lf_mpi{
         ~lf_mpi_svc();
         bool init();
         void wait_on_exit();
-        /// @brief should only be called at exit after all threads are closed
+        /// @brief must be called for service deinit 
         static void exit_svc();
         private:
             luckfox_mpi_config lf_config = {0};

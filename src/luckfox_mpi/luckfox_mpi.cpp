@@ -415,14 +415,14 @@ bool luckfox_mpi::init_vpss(){
 
 luckfox_mpi::~luckfox_mpi()
 {
-    int32_t rk_res = -1;
+    int32_t rk_res = 0;
     LOGD("deleting luckfox mpi handle");
     //TODO:proper cleanup
     if(enabled_flags.stream_locked.load() == true){
         rk_res = RK_MPI_VENC_ReleaseStream(mpi_ctx.video_encoder.s32ChnId,&pstStream);
         LOGD("releasing stream in cleanup. res:%d",rk_res);
     }
-    if(enabled_flags.vi_bind_venc && rk_res == RK_SUCCESS){
+    if(enabled_flags.vi_bind_venc && !mpi_ctx.osd_enable){
         MPP_CHN_S vin = {.enModId = RK_ID_VI,
                             .s32DevId = mpi_ctx.video_in.s32DevId,
                             .s32ChnId = mpi_ctx.video_in.s32ChnId};
@@ -447,10 +447,6 @@ luckfox_mpi::~luckfox_mpi()
         LOGD("calling RK_MPI_VI_DisableChn. res:%d",rk_res);
         rk_res = RK_MPI_VI_DisableDev(mpi_ctx.video_in.s32DevId);
         LOGD("calling RK_MPI_VI_DisableDev. res%d",rk_res);
-    }
-    if(rk_res == RK_SUCCESS){
-        rk_res =  RK_MPI_SYS_Exit();
-        LOGD("calling  RK_MPI_SYS_Exit. res:%d",rk_res);
     }
     if(rk_res == RK_SUCCESS){
         rk_res = rk_aiq_uapi2_sysctl_stop(mpi_ctx.video_in.aiq_ctx,true);

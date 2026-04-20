@@ -19,6 +19,11 @@ void lf_mpi::lf_mpi_svc::exit_svc()
     if(!svc){
         return;
     }
+    if(!svc->lf_config.stop_flag->load(memory_order_get)){
+        LOGE("called exit_svc when stop flag not set. forcing flag set!");
+        svc->lf_config.stop_flag->store(true,memory_order_set);
+    }
+    svc->wait_on_exit();
     if(svc->_osd_update_timer_thread_ctx.osd_handle)
         delete svc->_osd_update_timer_thread_ctx.osd_handle;
     svc->_osd_update_timer_thread_ctx.osd_handle = nullptr;
@@ -58,6 +63,7 @@ lf_mpi_svc::lf_mpi_svc(luckfox_mpi_config config):
         .stop_flag = config.stop_flag
     }
 {
+    RK_MPI_SYS_Init();
 }
 
 
@@ -80,6 +86,7 @@ lf_mpi_svc* lf_mpi_svc::take()
 lf_mpi::lf_mpi_svc::~lf_mpi_svc()
 {
     wait_on_exit();
+    RK_MPI_SYS_Exit();
 }
 
 bool lf_mpi_svc::init(){
@@ -510,7 +517,7 @@ void lf_mpi_svc::send_rtsp_frame_thread(send_rtsp_frame_thread_ctx *thread_ctx)
         if(!venc_stream || data_len == 0){
             std::this_thread::sleep_for(std::chrono::milliseconds(2));
             LOGE("Failed to get venc stream");
-            continue;
+            return;
         }
         svc->idr_reset.store(false,memory_order_set);
         video_frame.size = data_len;
