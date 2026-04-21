@@ -1,4 +1,5 @@
 ﻿TARGET0 = rtsp_server
+TARGET1 = rtsp_daemon
 
 BUILD_DIR = ./build
 LIB_DIR = $(BUILD_DIR)/bin
@@ -56,6 +57,9 @@ $(OBJ_DIR)/%.o: ./src/generic_log/%.c
 $(OBJ_DIR)/%.o: ./src/osd/%.cpp
 	$(CXX) -c $(CXXFLAGS) $< -o $@
 
+$(OBJ_DIR)/%.o: ./src/rtsp_daemon/rtsp_daemon.cpp
+	$(CXX) -c $(CXXFLAGS) $< -o $@
+
 CXXFILES0   = $(notdir $(wildcard ./src/net/*.cpp))
 CXXOBJS0    = $(patsubst %.cpp, $(OBJ_DIR)/%.o, $(CXXFILES0))
 
@@ -74,15 +78,21 @@ CXXOBJS8    = $(patsubst %.cpp, $(OBJ_DIR)/%.o, $(CXXFILES8))
 CXXFILES9   = $(notdir $(wildcard ./src/generic_log/*.c))
 CXXOBJS9    = $(patsubst %.c, $(OBJ_DIR)/%.o, $(CXXFILES9))
 
-CXXFILES10   = $(notdir $(wildcard ./src/osd/*.cpp))
-CXXOBJS10    = $(patsubst %.cpp, $(OBJ_DIR)/%.o, $(CXXFILES10))
+CXXFILES10  = $(notdir $(wildcard ./src/osd/*.cpp))
+CXXOBJS10   = $(patsubst %.cpp, $(OBJ_DIR)/%.o, $(CXXFILES10))
+
+CXXFILES11	= $(notdir $(wildcard ./src/rtsp_daemon/rtsp_daemon.cpp))
+CXXOBJS11	= $(patsubst %.cpp, $(OBJ_DIR)/%.o, $(CXXFILES11))
 
 $(LIB_DIR)/$(TARGET0): $(CXXOBJS0) $(CXXOBJS1) $(CXXOBJS2) $(CXXOBJS3) $(CXXOBJS8) $(CXXOBJS9) $(CXXOBJS10)
 	$(CXX) $^ -o $@ $(LDFLAGS) $(LDLIBS)
 
+$(LIB_DIR)/$(TARGET1): $(CXXOBJS11)
+	$(CXX) $^ -o $@ $(LDFLAGS)
 
-all: $(LIB_DIR)/$(TARGET0) 
+all: $(LIB_DIR)/$(TARGET0) $(LIB_DIR)/$(TARGET1)
 	 @echo "rtsp_server build successful"
+	 @echo "rtsp_daemon build successful"
 
 clean:
 	rm -rf $(BUILD_DIR)

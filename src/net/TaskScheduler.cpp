@@ -35,13 +35,15 @@ TaskScheduler::~TaskScheduler()
 
 void TaskScheduler::Start()
 {
+#if 0
 #if defined(__linux) || defined(__linux__) 
 	signal(SIGPIPE, SIG_IGN);
 	signal(SIGQUIT, SIG_IGN);
 	signal(SIGUSR1, SIG_IGN);
 	signal(SIGTERM, SIG_IGN);
 	signal(SIGKILL, SIG_IGN);
-#endif     
+#endif  
+#endif   
 	is_shutdown_ = false;
 	while (!is_shutdown_) {
 		this->HandleTriggerEvent();
