@@ -47,5 +47,13 @@ namespace lf_mpi{
             inline static std::thread vi_thread;
             inline static std::thread timer_thread;
             inline static std::thread rtsp_thread;
+            inline static std::atomic<uint32_t> connected_clients = 0;
+    };
+
+    struct VencStreamDeleter {
+        luckfox_mpi* handle;
+        void operator()(uint8_t*) const {
+            if (handle) handle->venc_release_stream();
+        }
     };
 }

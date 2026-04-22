@@ -15,12 +15,17 @@ void signal_handler(int signal){
     quit_flag = 1;
 }
 
-/// TODO: create an rtsp daemon that use eventfd for gracefull shutdown
 int main(int argc, char **argv)
 {	
     log_level_set(LOG_DBG);
-    signal(SIGINT,signal_handler);
-    signal(SIGTERM,signal_handler);
+    if(signal(SIGINT,signal_handler) == SIG_ERR){
+        LOGE("failed to set SIGINT handler");
+        return -1;
+    }
+    if(signal(SIGTERM,signal_handler) == SIG_ERR){
+        LOGE("failed to set SIGTERM handler");
+        return -1;
+    }
     flag stop_flag{false};
     LOGD("RK_MPI_SYS_Init done.");
     lf_mpi::luckfox_mpi_config config{};

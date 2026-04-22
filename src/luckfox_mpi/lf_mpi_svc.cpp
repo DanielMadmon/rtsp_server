@@ -464,21 +464,21 @@ void lf_mpi_svc::osd_update_timer_thread(osd_update_timer_thread_ctx *thread_ctx
 
 void lf_mpi_svc::connect_callback(xop::MediaSessionId sessionId, std::string peer_ip, 
                                         uint16_t peer_port){
+    lf_mpi_svc::connected_clients.fetch_add(1,memory_order_set);
     LOGI("RTSP client connect, ip=%s, port=%hu \n", peer_ip.c_str(), peer_port);
-    ///TODO:clear on sending thread
     lf_mpi_svc::idr_reset.store(true,memory_order_set);
     lf_mpi_svc::client_conn_flag.store(true,memory_order_set);
 }
 
 void lf_mpi_svc::disconnect_callback(xop::MediaSessionId sessionId, std::string peer_ip, 
                                         uint16_t peer_port){
-    ///TODO: track clients count before setting flag to false.
-    lf_mpi_svc::client_conn_flag.store(false,memory_order_set);
+    uint32_t conns_now = lf_mpi_svc::connected_clients.fetch_sub(1,memory_order_set) - 1;
+    bool st_conn_flag = conns_now > 0;
+    lf_mpi_svc::client_conn_flag.store(st_conn_flag,memory_order_set);
 }
 
 void lf_mpi_svc::send_rtsp_frame_thread(send_rtsp_frame_thread_ctx *thread_ctx)
 {
-    ///TODO: replace svc with function pointers
     if(!thread_ctx){
         LOGE("thread_ctx can't be null. exiting send_venc_frame_thread");
         return;
@@ -512,22 +512,18 @@ void lf_mpi_svc::send_rtsp_frame_thread(send_rtsp_frame_thread_ctx *thread_ctx)
             std::this_thread::sleep_for(std::chrono::milliseconds(2));
             continue;
         }
+        video_frame.buffer.reset();
         venc_stream = 
             mpi_handle->venc_get_stream(svc->idr_reset.load(memory_order_get),&data_len,&ts);
         if(!venc_stream || data_len == 0){
-            std::this_thread::sleep_for(std::chrono::milliseconds(2));
             LOGE("Failed to get venc stream");
             return;
         }
         svc->idr_reset.store(false,memory_order_set);
         video_frame.size = data_len;
-        ///TODO:find a way to use a preallocated buffer.
-        video_frame.buffer.reset(new uint8_t[video_frame.size]);
-        memcpy(video_frame.buffer.get(),venc_stream,data_len);
+        video_frame.buffer.reset(venc_stream,lf_mpi::VencStreamDeleter{mpi_handle});
         xop::H265Source::GetTimestamp(&video_frame.timeNow,&video_frame.timestamp);
         thread_ctx->rtsp_server->PushFrame(thread_ctx->session_id,xop::channel_0,video_frame);
-        mpi_handle->venc_release_stream();
-        ///TODO:maybe check return value
     }
 }
 
