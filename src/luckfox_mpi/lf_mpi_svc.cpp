@@ -38,10 +38,10 @@ void lf_mpi::lf_mpi_svc::exit_svc()
 }
 
 /// private constructor
-lf_mpi_svc::lf_mpi_svc(luckfox_mpi_config config):
+lf_mpi_svc::lf_mpi_svc(LuckfoxMpiConfig config):
     lf_config{config},
     _send_rtsp_frame_thread_ctx{
-        .mpi_handle =  new luckfox_mpi(config.rknn_path),
+        .mpi_handle =  new LuckfoxMpi(config.rknn_path),
         .rtsp_event_loop = new xop::EventLoop(),
         .rtsp_server = xop::RtspServer::Create(
             _send_rtsp_frame_thread_ctx.rtsp_event_loop
@@ -68,7 +68,7 @@ lf_mpi_svc::lf_mpi_svc(luckfox_mpi_config config):
 
 
 
-lf_mpi_svc& lf_mpi_svc::create_new(luckfox_mpi_config config)
+lf_mpi_svc& lf_mpi_svc::create_new(LuckfoxMpiConfig config)
 {
     assert(config.stop_flag != nullptr);
     if(!svc_instance){
@@ -145,9 +145,9 @@ bool lf_mpi_svc::init(){
     _send_rtsp_frame_thread_ctx.session_id = 
         _send_rtsp_frame_thread_ctx.rtsp_server->AddSession(_send_rtsp_frame_thread_ctx.session);
     
-    _send_vi_frame_thread_ctx.vi_get_frame = &luckfox_mpi::vi_get_frame;
-    _send_vi_frame_thread_ctx.vi_release_frame = &luckfox_mpi::vi_release_frame;
-    _send_vi_frame_thread_ctx.venc_send_frame = &luckfox_mpi::venc_send_frame;
+    _send_vi_frame_thread_ctx.vi_get_frame = &LuckfoxMpi::vi_get_frame;
+    _send_vi_frame_thread_ctx.vi_release_frame = &LuckfoxMpi::vi_release_frame;
+    _send_vi_frame_thread_ctx.venc_send_frame = &LuckfoxMpi::venc_send_frame;
     init_done.store(true);
     ret = start_vi_svc();
     if(!ret){
@@ -487,7 +487,7 @@ void lf_mpi_svc::send_rtsp_frame_thread(send_rtsp_frame_thread_ctx *thread_ctx)
         LOGE("thread_ctx->mpi_handle can't be null. exiting send_venc_frame_thread");
         return;
     }
-    luckfox_mpi* mpi_handle = thread_ctx->mpi_handle;
+    LuckfoxMpi* mpi_handle = thread_ctx->mpi_handle;
     lf_mpi_svc* svc = lf_mpi_svc::take();
     if(!svc){
         LOGE("lf_mpi_svc::take(). returned null. exiting send_venc_frame_thread");

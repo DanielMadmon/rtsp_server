@@ -1,5 +1,5 @@
 #pragma once
-#include "luckfox_mpi.hpp"
+#include "LuckfoxMpi.hpp"
 #include "RtspServer.h"
 #include "lf_types.hpp"
 #include <atomic>
@@ -12,15 +12,15 @@ namespace lf_mpi{
     class lf_mpi_svc{
         using u8_vec_mmz =  std::vector<uint8_t,mmz_alloc<uint8_t>>;
         public:
-        static lf_mpi_svc& create_new(luckfox_mpi_config config);
+        static lf_mpi_svc& create_new(LuckfoxMpiConfig config);
         ~lf_mpi_svc();
         bool init();
         void wait_on_exit();
         /// @brief must be called for service deinit 
         static void exit_svc();
         private:
-            luckfox_mpi_config lf_config = {0};
-            lf_mpi_svc(luckfox_mpi_config config);
+            LuckfoxMpiConfig lf_config = {0};
+            lf_mpi_svc(LuckfoxMpiConfig config);
             static lf_mpi_svc* take();
             static void connect_callback(xop::MediaSessionId sessionId, std::string peer_ip, 
                                         uint16_t peer_port);
@@ -51,7 +51,7 @@ namespace lf_mpi{
     };
 
     struct VencStreamDeleter {
-        luckfox_mpi* handle;
+        LuckfoxMpi* handle;
         void operator()(uint8_t*) const {
             if (handle) handle->venc_release_stream();
         }

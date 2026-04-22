@@ -2,7 +2,7 @@
 #include "sample_comm.h"
 #include "RtspServer.h"
 #include "acetimec/src/acetimec.h"
-#include "luckfox_mpi.hpp"
+#include "LuckfoxMpi.hpp"
 #include "mmz_alloc.hpp"
 #include <chrono>
 #include <memory>
@@ -13,7 +13,7 @@ namespace lf_mpi{
     
 
     struct send_rtsp_frame_thread_ctx{
-        luckfox_mpi* mpi_handle;
+        LuckfoxMpi* mpi_handle;
         xop::EventLoop* rtsp_event_loop;
         std::shared_ptr<xop::RtspServer> rtsp_server;
         xop::MediaSessionId session_id;
@@ -36,9 +36,9 @@ namespace lf_mpi{
         osd::bmp_resolution* pixel_buffer_size = nullptr;
         flag* update_osd_f = nullptr;
         flag* stop_flag = nullptr;
-        std::function<MB_BLK(luckfox_mpi&, VIDEO_FRAME_INFO_S*)> vi_get_frame = nullptr;
-        std::function<void(luckfox_mpi&)> vi_release_frame = nullptr;
-        std::function<bool(luckfox_mpi&, VIDEO_FRAME_INFO_S&)> venc_send_frame = nullptr;
+        std::function<MB_BLK(LuckfoxMpi&, VIDEO_FRAME_INFO_S*)> vi_get_frame = nullptr;
+        std::function<void(LuckfoxMpi&)> vi_release_frame = nullptr;
+        std::function<bool(LuckfoxMpi&, VIDEO_FRAME_INFO_S&)> venc_send_frame = nullptr;
     };
 
     typedef struct{
@@ -56,5 +56,5 @@ namespace lf_mpi{
         bool osd_enable = true;
         uint32_t font_size = 32;
         flag* stop_flag = nullptr;
-    }luckfox_mpi_config;
+    }LuckfoxMpiConfig;
 }

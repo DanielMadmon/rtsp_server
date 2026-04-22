@@ -28,7 +28,7 @@ int main(int argc, char **argv)
     }
     flag stop_flag{false};
     LOGD("RK_MPI_SYS_Init done.");
-    lf_mpi::luckfox_mpi_config config{};
+    lf_mpi::LuckfoxMpiConfig config{};
     config.stop_flag = &stop_flag;
     lf_mpi_svc& mpi_svc = lf_mpi_svc::create_new(config);
     mpi_svc.init();

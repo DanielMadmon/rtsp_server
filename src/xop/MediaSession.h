@@ -21,7 +21,6 @@
 #include "MediaSource.h"
 #include "net/Socket.h"
 #include "net/RingBuffer.h"
-#include "luckfox_mpi.hpp"
 
 namespace xop
 {
