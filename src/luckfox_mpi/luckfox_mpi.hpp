@@ -89,16 +89,6 @@ private:
         bool b_venc_en;
     }_luckfox_mpi_venc_ctx;
     bool init_vi();
-    MB_BLK mmz_alloc(size_t size);
-    void mmz_free(void* ptr);
-    void osd_bmp_update_thread(osd::text_osd& osd_handle,
-                                AtcTimeZone& tz,
-                                std::vector<uint8_t>&pixel_buffer,
-                                osd::bmp_resolution& size,
-                                osd::flag& update_osd_f,
-                                osd::flag&stop_f);
-    im_osd_t get_osd_config(uint32_t width);
-    im_rect get_osd_rect(int32_t width,int32_t height);
     const int32_t vi_buf_count = 1; 
     int32_t vi_dev_id = 0;
     const uint32_t vpss_max_width = 4096;
