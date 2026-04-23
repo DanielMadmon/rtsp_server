@@ -41,6 +41,7 @@ void lf_mpi::lf_mpi_svc::exit_svc()
 lf_mpi_svc::lf_mpi_svc(LuckfoxMpiConfig config):
     lf_config{config},
     _send_rtsp_frame_thread_ctx{
+        ///TODO:move handle to static inline in class
         .mpi_handle =  new LuckfoxMpi(config.rknn_path),
         .rtsp_event_loop = new xop::EventLoop(),
         .rtsp_server = xop::RtspServer::Create(
