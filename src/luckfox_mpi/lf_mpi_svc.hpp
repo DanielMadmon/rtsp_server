@@ -1,27 +1,42 @@
 #pragma once
+#include <atomic>
+#include <memory>
 #include "LuckfoxMpi.hpp"
 #include "RtspServer.h"
 #include "lf_types.hpp"
-#include <atomic>
-#include <memory>
-#include <mutex>
+
 
 namespace lf_mpi{
-    using std::mutex;
-    using std::lock_guard;
-    class lf_mpi_svc{
+
+    /// @brief a singleton class for easy handling of
+    /// streaming from camera to video encoder and from video
+    /// encoder to rtsp server
+    class MpiSvc{
         using u8_vec_mmz =  std::vector<uint8_t,mmz_alloc<uint8_t>>;
         public:
-        static lf_mpi_svc& create_new(LuckfoxMpiConfig config);
-        ~lf_mpi_svc();
+        /// @brief create a new lf_mpi_svc instatnce. 
+        /// if already created returns old instance and does nothing
+        /// @param config service configuration
+        /// @return a reference to lf_mpi_svc
+        static MpiSvc& create_new(LuckfoxMpiConfig config);
+        /// @brief starts service based on config passed before(e.g rtsp server and 
+        //  sender thread. osd drawing)
+        /// @return true on success
         bool init();
-        void wait_on_exit();
-        /// @brief must be called for service deinit 
+        /// @brief must be called for service deinit.
+        /// if config.stop_flag is unset than it will be set
+        /// and error will be printed before exiting
         static void exit_svc();
         private:
             LuckfoxMpiConfig lf_config = {0};
-            lf_mpi_svc(LuckfoxMpiConfig config);
-            static lf_mpi_svc* take();
+            LuckfoxMpi* mpi_handle = nullptr;
+            /// private constructor
+            MpiSvc(LuckfoxMpiConfig config);
+            /// private destructor
+            ~MpiSvc();
+            /// @brief blocking wait for all internal threads to exit.
+            void wait_on_exit();
+            static MpiSvc* take();
             static void connect_callback(xop::MediaSessionId sessionId, std::string peer_ip, 
                                         uint16_t peer_port);
             static void disconnect_callback(xop::MediaSessionId sessionId, std::string peer_ip, 
@@ -33,7 +48,7 @@ namespace lf_mpi{
             bool start_vi_svc();
             bool start_rtsp_svc();
             //vars
-            inline static lf_mpi_svc* svc_instance = nullptr;
+            inline static MpiSvc* svc_instance = nullptr;
             u8_vec_mmz _pixel_buffer{};
             osd::bmp_resolution _size = {0,0};
             flag _update_osd_flag {false};

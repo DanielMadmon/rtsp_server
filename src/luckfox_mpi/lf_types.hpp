@@ -13,7 +13,6 @@ namespace lf_mpi{
     
 
     struct send_rtsp_frame_thread_ctx{
-        LuckfoxMpi* mpi_handle;
         xop::EventLoop* rtsp_event_loop;
         std::shared_ptr<xop::RtspServer> rtsp_server;
         xop::MediaSessionId session_id;

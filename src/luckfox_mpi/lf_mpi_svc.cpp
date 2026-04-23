@@ -13,9 +13,9 @@ using namespace std::chrono;
 constexpr std::memory_order memory_order_set = std::memory_order_seq_cst;
 constexpr std::memory_order memory_order_get = std::memory_order_seq_cst;
 
-void lf_mpi::lf_mpi_svc::exit_svc()
+void lf_mpi::MpiSvc::exit_svc()
 {
-    lf_mpi_svc* svc = lf_mpi_svc::take();
+    MpiSvc* svc = MpiSvc::take();
     if(!svc){
         return;
     }
@@ -31,18 +31,17 @@ void lf_mpi::lf_mpi_svc::exit_svc()
     svc->_send_rtsp_frame_thread_ctx.rtsp_server.reset();
     delete svc->_send_rtsp_frame_thread_ctx.rtsp_event_loop;
 
-    if(svc->_send_rtsp_frame_thread_ctx.mpi_handle)
-        delete svc->_send_rtsp_frame_thread_ctx.mpi_handle;
-    svc->_send_rtsp_frame_thread_ctx.mpi_handle = nullptr;
+    if(svc->mpi_handle)
+        delete svc->mpi_handle;
+    svc->mpi_handle = nullptr;
 
 }
 
-/// private constructor
-lf_mpi_svc::lf_mpi_svc(LuckfoxMpiConfig config):
+MpiSvc::MpiSvc(LuckfoxMpiConfig config):
     lf_config{config},
+    mpi_handle{new LuckfoxMpi(config.rknn_path)},
     _send_rtsp_frame_thread_ctx{
         ///TODO:move handle to static inline in class
-        .mpi_handle =  new LuckfoxMpi(config.rknn_path),
         .rtsp_event_loop = new xop::EventLoop(),
         .rtsp_server = xop::RtspServer::Create(
             _send_rtsp_frame_thread_ctx.rtsp_event_loop
@@ -69,32 +68,32 @@ lf_mpi_svc::lf_mpi_svc(LuckfoxMpiConfig config):
 
 
 
-lf_mpi_svc& lf_mpi_svc::create_new(LuckfoxMpiConfig config)
+MpiSvc& MpiSvc::create_new(LuckfoxMpiConfig config)
 {
     assert(config.stop_flag != nullptr);
     if(!svc_instance){
-        svc_instance = new lf_mpi_svc(config);
+        svc_instance = new MpiSvc(config);
         LOGD("lf mpi svc created new");
     }
     return *svc_instance;
 }
 
-lf_mpi_svc* lf_mpi_svc::take()
+MpiSvc* MpiSvc::take()
 {
     return svc_instance;
 }
 
-lf_mpi::lf_mpi_svc::~lf_mpi_svc()
+lf_mpi::MpiSvc::~MpiSvc()
 {
     wait_on_exit();
     RK_MPI_SYS_Exit();
 }
 
-bool lf_mpi_svc::init(){
+bool MpiSvc::init(){
     if(init_done.load()){
         return true;
     }
-    bool ret = _send_rtsp_frame_thread_ctx.mpi_handle->init_video_in(
+    bool ret = mpi_handle->init_video_in(
         lf_config.mode,
         lf_config.fps,
         lf_config.width,
@@ -104,7 +103,7 @@ bool lf_mpi_svc::init(){
         LOGE("failed on init_video_in");
         return ret;
     }
-    ret = _send_rtsp_frame_thread_ctx.mpi_handle->init_video_encoder(
+    ret = mpi_handle->init_video_encoder(
         RK_VIDEO_ID_HEVC,
         lf_config.width,
         lf_config.height
@@ -164,7 +163,7 @@ bool lf_mpi_svc::init(){
     
 }
 
-bool lf_mpi_svc::start_vi_svc()
+bool MpiSvc::start_vi_svc()
 {
     ///TODO:make use of osd enable flag
     timer_thread = std::thread(osd_update_timer_thread,&_osd_update_timer_thread_ctx);
@@ -173,7 +172,7 @@ bool lf_mpi_svc::start_vi_svc()
     
 }
 
-bool lf_mpi_svc::start_rtsp_svc()
+bool MpiSvc::start_rtsp_svc()
 {
     if(!init_done.load(memory_order_get)){
         LOGE("failed to start rtsp thread. must call init before starting thread.");
@@ -183,7 +182,7 @@ bool lf_mpi_svc::start_rtsp_svc()
     return true;
 }
 
-void lf_mpi::lf_mpi_svc::wait_on_exit()
+void lf_mpi::MpiSvc::wait_on_exit()
 {
    
     if(timer_thread.joinable()){
@@ -201,9 +200,7 @@ void lf_mpi::lf_mpi_svc::wait_on_exit()
 }
 
 
-/// @brief TODO: fix artifacts when osd gets updated
-/// @param thread_ctx 
-void lf_mpi_svc::send_vi_frame_thread(send_vi_frame_thread_ctx * thread_ctx)
+void MpiSvc::send_vi_frame_thread(send_vi_frame_thread_ctx * thread_ctx)
 {
     if(!thread_ctx){
         LOGE("thread context can't be null exiting send_vi_frame_thread");
@@ -227,12 +224,12 @@ void lf_mpi_svc::send_vi_frame_thread(send_vi_frame_thread_ctx * thread_ctx)
     rga_buffer_t rga_venc_buf = {0};
 
     rga_buf::rga_buffer rga_buf_ctor;
-    lf_mpi_svc* svc = lf_mpi_svc::take();
+    MpiSvc* svc = MpiSvc::take();
     if(!svc){
         LOGE("lf_mpi_svc is not enabled. exiting send vi thread");
         return;
     }
-    auto mpi_handle = std::ref(*svc->_send_rtsp_frame_thread_ctx.mpi_handle);
+    auto mpi_handle = std::ref(*svc->mpi_handle);
     size_t vi_rgba_buffer_size = rga_buf_ctor.get_buffer_size(
         svc->lf_config.width,
         svc->lf_config.height,
@@ -391,9 +388,9 @@ void lf_mpi_svc::send_vi_frame_thread(send_vi_frame_thread_ctx * thread_ctx)
     }
 }
 
-void lf_mpi_svc::osd_update_timer_thread(osd_update_timer_thread_ctx *thread_ctx)
+void MpiSvc::osd_update_timer_thread(osd_update_timer_thread_ctx *thread_ctx)
 {
-    lf_mpi_svc* svc = lf_mpi_svc::take();
+    MpiSvc* svc = MpiSvc::take();
     if(!svc){
         LOGE("got null from lf_mpi_svc::take() exiting timer thread");
         return;
@@ -463,42 +460,41 @@ void lf_mpi_svc::osd_update_timer_thread(osd_update_timer_thread_ctx *thread_ctx
 
 
 
-void lf_mpi_svc::connect_callback(xop::MediaSessionId sessionId, std::string peer_ip, 
+void MpiSvc::connect_callback(xop::MediaSessionId sessionId, std::string peer_ip, 
                                         uint16_t peer_port){
-    lf_mpi_svc::connected_clients.fetch_add(1,memory_order_set);
+    MpiSvc::connected_clients.fetch_add(1,memory_order_set);
     LOGI("RTSP client connect, ip=%s, port=%hu \n", peer_ip.c_str(), peer_port);
-    lf_mpi_svc::idr_reset.store(true,memory_order_set);
-    lf_mpi_svc::client_conn_flag.store(true,memory_order_set);
+    MpiSvc::idr_reset.store(true,memory_order_set);
+    MpiSvc::client_conn_flag.store(true,memory_order_set);
 }
 
-void lf_mpi_svc::disconnect_callback(xop::MediaSessionId sessionId, std::string peer_ip, 
+void MpiSvc::disconnect_callback(xop::MediaSessionId sessionId, std::string peer_ip, 
                                         uint16_t peer_port){
-    uint32_t conns_now = lf_mpi_svc::connected_clients.fetch_sub(1,memory_order_set) - 1;
+    uint32_t conns_now = MpiSvc::connected_clients.fetch_sub(1,memory_order_set) - 1;
     bool st_conn_flag = conns_now > 0;
-    lf_mpi_svc::client_conn_flag.store(st_conn_flag,memory_order_set);
+    MpiSvc::client_conn_flag.store(st_conn_flag,memory_order_set);
 }
 
-void lf_mpi_svc::send_rtsp_frame_thread(send_rtsp_frame_thread_ctx *thread_ctx)
+void MpiSvc::send_rtsp_frame_thread(send_rtsp_frame_thread_ctx *thread_ctx)
 {
     if(!thread_ctx){
         LOGE("thread_ctx can't be null. exiting send_venc_frame_thread");
         return;
     }
-    if(!thread_ctx->mpi_handle){
-        LOGE("thread_ctx->mpi_handle can't be null. exiting send_venc_frame_thread");
-        return;
-    }
-    LuckfoxMpi* mpi_handle = thread_ctx->mpi_handle;
-    lf_mpi_svc* svc = lf_mpi_svc::take();
+    MpiSvc* svc = MpiSvc::take();
     if(!svc){
         LOGE("lf_mpi_svc::take(). returned null. exiting send_venc_frame_thread");
+        return;
+    }
+    if(!svc->mpi_handle){
+        LOGE("mpi_handle can't be null existing %s",__FUNCTION__);
         return;
     }
     if(!svc->init_done.load(memory_order_get)){
         LOGE("send_venc_frame_thread called before init. exiting thread.");
         return;
     }
-    bool res = mpi_handle->start_video_encoder(svc->lf_config.osd_enable);
+    bool res = svc->mpi_handle->start_video_encoder(svc->lf_config.osd_enable);
     if(!res){
         LOGE("failed to start video encoder. exiting send_venc_frame_thread");
         return;
@@ -515,20 +511,20 @@ void lf_mpi_svc::send_rtsp_frame_thread(send_rtsp_frame_thread_ctx *thread_ctx)
         }
         video_frame.buffer.reset();
         venc_stream = 
-            mpi_handle->venc_get_stream(svc->idr_reset.load(memory_order_get),&data_len,&ts);
+            svc->mpi_handle->venc_get_stream(svc->idr_reset.load(memory_order_get),&data_len,&ts);
         if(!venc_stream || data_len == 0){
             LOGE("Failed to get venc stream");
             return;
         }
         svc->idr_reset.store(false,memory_order_set);
         video_frame.size = data_len;
-        video_frame.buffer.reset(venc_stream,lf_mpi::VencStreamDeleter{mpi_handle});
+        video_frame.buffer.reset(venc_stream,lf_mpi::VencStreamDeleter{svc->mpi_handle});
         xop::H265Source::GetTimestamp(&video_frame.timeNow,&video_frame.timestamp);
         thread_ctx->rtsp_server->PushFrame(thread_ctx->session_id,xop::channel_0,video_frame);
     }
 }
 
-inline time_t lf_mpi_svc::utils_get_next_minute(time_t start_time){
+inline time_t MpiSvc::utils_get_next_minute(time_t start_time){
     std::tm tm = *std::localtime(&start_time);  // Convert time_t to local tm
     tm.tm_sec = 0;                              // Clear seconds
     if (tm.tm_min == 59) {                      // Handle minute rollover
