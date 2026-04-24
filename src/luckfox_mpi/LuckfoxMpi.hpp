@@ -1,9 +1,9 @@
 #pragma once
 
-#include "sample_comm.h"
 #include <pthread.h>
 #include <atomic>
 #include <string>
+#include "rk_inc.hpp"
 #include "im2d.h"
 #include "osd.hpp"
 /*
@@ -29,7 +29,7 @@ public:
     bool init_video_in(rk_aiq_working_mode_t mode,int32_t fps,uint32_t width,uint32_t height);
     bool init_vpss();
     bool init_video_encoder(RK_CODEC_ID_E codec,uint32_t width,uint32_t height);
-    bool start_video_encoder(bool osd_enable);
+    bool start_video_encoder();
     uint8_t* venc_get_stream(bool restart,size_t *stream_len,uint64_t* timestamp);
     bool venc_release_stream();
     MB_BLK vi_get_frame(VIDEO_FRAME_INFO_S* out_frame_info);

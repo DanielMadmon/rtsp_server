@@ -525,11 +525,8 @@ uint8_t* LuckfoxMpi::venc_get_stream(bool restart,size_t *stream_len,uint64_t* t
         LOGE("Null pointer passed to luckfox_mpi::venc_get_stream!");
         return NULL;
     }
-    if(!enabled_flags.vi_bind_venc 
-        || !enabled_flags.vi_bind_venc 
-        || !enabled_flags.venc_enabled 
-        || !enabled_flags.vi_enabled){
-        LOGE("call to luckfox_mpi::venc_get_stream before setting upstream!");
+    if(!enabled_flags.venc_enabled || !enabled_flags.venc_start_rcv){
+        LOGE("call to luckfox_mpi::venc_get_stream before enabling/starting video encoder!");
         return NULL;
     }
     if(enabled_flags.stream_locked.load() == true){
@@ -615,7 +612,7 @@ bool LuckfoxMpi::venc_restart()
 
 /// @brief must be called after init_video_encoder and before venc_get_stream
 /// @return false on fail
-bool LuckfoxMpi::start_video_encoder(bool osd_enable){
+bool LuckfoxMpi::start_video_encoder(){
     VENC_RECV_PIC_PARAM_S stRecvParam;
     memset(&stRecvParam,0,sizeof(stRecvParam));
     stRecvParam.s32RecvPicNum = -1;
@@ -627,12 +624,5 @@ bool LuckfoxMpi::start_video_encoder(bool osd_enable){
 		return false;
 	}
     enabled_flags.venc_start_rcv = true;
-    bool res = true;
-    if(!osd_enable){
-        res = bind_vin_venc();
-    }
-    mpi_ctx.osd_enable = osd_enable;
-    ///TODO:better flag name
-    enabled_flags.vi_bind_venc = res;
-    return res;
+    return true;
 }

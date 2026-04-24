@@ -6,9 +6,11 @@
 #include "generic_log.h"
 #include "acetimec.h"
 #include "mmz_alloc.hpp"
+#include "routing.hpp"
 
 using namespace lf_mpi;
 using namespace std::chrono;
+using namespace routing;
 
 constexpr std::memory_order memory_order_set = std::memory_order_seq_cst;
 constexpr std::memory_order memory_order_get = std::memory_order_seq_cst;
@@ -41,7 +43,6 @@ MpiSvc::MpiSvc(LuckfoxMpiConfig config):
     lf_config{config},
     mpi_handle{new LuckfoxMpi(config.rknn_path)},
     _send_rtsp_frame_thread_ctx{
-        ///TODO:move handle to static inline in class
         .rtsp_event_loop = new xop::EventLoop(),
         .rtsp_server = xop::RtspServer::Create(
             _send_rtsp_frame_thread_ctx.rtsp_event_loop
@@ -90,7 +91,7 @@ lf_mpi::MpiSvc::~MpiSvc()
 }
 
 bool MpiSvc::init(){
-    if(init_done.load()){
+    if(init_done.load(memory_order_get)){
         return true;
     }
     bool ret = mpi_handle->init_video_in(
@@ -111,6 +112,11 @@ bool MpiSvc::init(){
     if(!ret){
         LOGE("failed on init video encoder");
         return ret;
+    }
+    ret = mpi_handle->start_video_encoder();
+    if(!ret){
+        LOGE("failed to start video encoder");
+        return false;
     }
     ret = _send_rtsp_frame_thread_ctx.rtsp_server->Start(
         lf_config.ip,
@@ -148,24 +154,52 @@ bool MpiSvc::init(){
     _send_vi_frame_thread_ctx.vi_get_frame = &LuckfoxMpi::vi_get_frame;
     _send_vi_frame_thread_ctx.vi_release_frame = &LuckfoxMpi::vi_release_frame;
     _send_vi_frame_thread_ctx.venc_send_frame = &LuckfoxMpi::venc_send_frame;
+    ret = false;
+    
+    switch (lf_config.vi_binding)
+    {
+        case(MpiViBindTo::OSD):{
+            ret = start_vi_svc();
+            if(!ret){
+                LOGE("failed to start vi svc");
+                return false;
+            }
+            break;
+        }
+        case(MpiViBindTo::VENC):{
+            ret = mpi_handle->bind_vin_venc();
+            if(!ret){
+                return false;
+            }
+            break;
+        }
+        case(MpiViBindTo::VPSS):{
+            LOGW("vi->vpss not yet supported!");
+            ret = mpi_handle->bind_vin_vpss();
+            if(!ret){
+                return false;
+            }
+            break;
+        }
+    }
     init_done.store(true);
-    ret = start_vi_svc();
-    if(!ret){
-        LOGE("failed to start vi svc");
-        return false;
+    if(lf_config.rtsp_enable){
+        ret = start_rtsp_svc();
+        if(!ret){
+            LOGE("failed to start rtsp svc");
+            return false;
+        }
     }
-    ret = start_rtsp_svc();
     if(!ret){
-        LOGE("failed to start rtsp svc");
-        return false;
+        LOGW("called MpiSvc::init without starting any service.");
     }
+
     return true;
     
 }
 
 bool MpiSvc::start_vi_svc()
 {
-    ///TODO:make use of osd enable flag
     timer_thread = std::thread(osd_update_timer_thread,&_osd_update_timer_thread_ctx);
     vi_thread =  std::thread(send_vi_frame_thread,&_send_vi_frame_thread_ctx);
     return true;
@@ -325,6 +359,7 @@ void MpiSvc::send_vi_frame_thread(send_vi_frame_thread_ctx * thread_ctx)
             continue;
         }
         //fetch vi->import to rga->frame2rgba->osd impose->frame2yuv->send venc
+        ///TODO: crop before conversion to rgba 
         vi_mb_blk = thread_ctx->vi_get_frame(mpi_handle,&out_frame_info);
         if(vi_mb_blk){
             addr_vi_yuv.phy_address = alloc.into_physical_address(vi_mb_blk);
@@ -492,11 +527,6 @@ void MpiSvc::send_rtsp_frame_thread(send_rtsp_frame_thread_ctx *thread_ctx)
     }
     if(!svc->init_done.load(memory_order_get)){
         LOGE("send_venc_frame_thread called before init. exiting thread.");
-        return;
-    }
-    bool res = svc->mpi_handle->start_video_encoder(svc->lf_config.osd_enable);
-    if(!res){
-        LOGE("failed to start video encoder. exiting send_venc_frame_thread");
         return;
     }
     size_t data_len = 0;

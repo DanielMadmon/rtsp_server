@@ -20,8 +20,9 @@ namespace lf_mpi{
         /// @return a reference to lf_mpi_svc
         static MpiSvc& create_new(LuckfoxMpiConfig config);
         /// @brief starts service based on config passed before(e.g rtsp server and 
-        //  sender thread. osd drawing)
+        /// sender thread. osd drawing)
         /// @return true on success
+        /// @warning Only call this function once between MpiSvc::create_new and MpiSvc::exit_svc
         bool init();
         /// @brief must be called for service deinit.
         /// if config.stop_flag is unset than it will be set
@@ -55,7 +56,7 @@ namespace lf_mpi{
             send_rtsp_frame_thread_ctx _send_rtsp_frame_thread_ctx = {0};
             osd_update_timer_thread_ctx _osd_update_timer_thread_ctx = {0};
             send_vi_frame_thread_ctx _send_vi_frame_thread_ctx;
-            flag init_done {false};
+            flag init_done{false};
             inline static flag idr_reset {true};
             inline static flag client_conn_flag {false};
             inline static constexpr size_t rtsp_buffer_size = 400 * 1024;

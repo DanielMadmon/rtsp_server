@@ -1,12 +1,13 @@
 #pragma once
+#include <chrono>
+#include <memory>
+#include <functional>
 #include "sample_comm.h"
 #include "RtspServer.h"
 #include "acetimec/src/acetimec.h"
 #include "LuckfoxMpi.hpp"
 #include "mmz_alloc.hpp"
-#include <chrono>
-#include <memory>
-#include <functional>
+#include "routing.hpp"
 
 namespace lf_mpi{
     typedef std::atomic<bool> flag;
@@ -40,6 +41,8 @@ namespace lf_mpi{
         std::function<bool(LuckfoxMpi&, VIDEO_FRAME_INFO_S&)> venc_send_frame = nullptr;
     };
 
+   
+
     typedef struct{
         std::string rknn_path = "/oem/usr/share/iqfiles";
         std::string font_file_path = "/oem/usr/share/simsun_en.ttf";
@@ -52,8 +55,9 @@ namespace lf_mpi{
         std::string url = "live";
         uint16_t port = 554;
         const AtcZoneInfo* timezone = &kAtcZonedballZoneAsia_Jerusalem;
-        bool osd_enable = true;
+        bool rtsp_enable = true;
         uint32_t font_size = 32;
+        routing::MpiViBindTo vi_binding = routing::MpiViBindTo::OSD;
         flag* stop_flag = nullptr;
     }LuckfoxMpiConfig;
 }

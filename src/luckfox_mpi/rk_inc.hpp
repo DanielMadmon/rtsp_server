@@ -1,0 +1,17 @@
+#pragma once
+
+#include "rk_mpi_sys.h"
+#include "rk_mpi_mb.h"
+#include "rk_mpi_vi.h"
+#include "rk_mpi_mmz.h"
+#include "rk_mpi_venc.h"
+#include "rk_mpi_vpss.h"
+#include "rk_aiq.h"
+#include "rk_aiq_comm.h"
+#include "xcam_common.h"
+#include "rk_aiq_user_api2_sysctl.h"
+#include "rk_aiq_user_api2_acp.h"
+#include "rk_aiq_uapi_ae_int_types_v2.h"
+#include "rk_aiq_user_api2_ae.h"
+#include "rk_aiq_user_api2_asharp_v33.h"
+#include "rk_aiq_user_api2_awb.h"
