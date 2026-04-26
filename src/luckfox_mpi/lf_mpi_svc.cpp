@@ -252,8 +252,6 @@ void MpiSvc::send_vi_frame_thread(send_vi_frame_thread_ctx * thread_ctx)
     rga_buffer_t rga_osd_buf = {0};
     ///rga buffer for vi frame
     rga_buffer_t rga_vi_yuv = {0};
-    ///rga buffer for vi frame converted to rgba8888 format
-    rga_buffer_t rga_vi_cvt = {0};
     ///rga buffer for post osd imposing converted back to YUV420P
     rga_buffer_t rga_venc_buf = {0};
 
@@ -264,23 +262,15 @@ void MpiSvc::send_vi_frame_thread(send_vi_frame_thread_ctx * thread_ctx)
         return;
     }
     auto mpi_handle = std::ref(*svc->mpi_handle);
-    size_t vi_rgba_buffer_size = rga_buf_ctor.get_buffer_size(
-        svc->lf_config.width,
-        svc->lf_config.height,
-        rgba_format
-    );
     size_t venc_yuv_buffer_size = rga_buf_ctor.get_buffer_size(
         svc->lf_config.width,
         svc->lf_config.height,
         yuv_format
     );
-    px_vec vi_rgba_buffer(vi_rgba_buffer_size);
     px_vec venc_yuv_buffer(venc_yuv_buffer_size);
     px_vec osd_rgba_buffer(1024 * 10);
     auto alloc = mmz_alloc<uint8_t>();
 
-    uint64_t phy_addr_vi_rgba_buff = alloc.virtual_to_physical_address(&vi_rgba_buffer[0]);
-    assert(phy_addr_vi_rgba_buff != 0);
     uint64_t phy_addr_venc_yuv_buff = alloc.virtual_to_physical_address(&venc_yuv_buffer[0]);
     assert(phy_addr_venc_yuv_buff != 0);
     using addr_struct = rga_buf::rga_buffer::rga_buf_addr_t;
@@ -293,33 +283,19 @@ void MpiSvc::send_vi_frame_thread(send_vi_frame_thread_ctx * thread_ctx)
         .buffer_type = rga_buf::rga_buffer::BUFFER_TYPE_PHYSICAL,
         .phy_address = 0
     };
-    addr_struct addr_vi_rgba = {
-        .buffer_type = rga_buf::rga_buffer::BUFFER_TYPE_PHYSICAL,
-        .phy_address = phy_addr_vi_rgba_buff
-    };
     addr_struct addr_venc_yuv = {
         .buffer_type = rga_buf::rga_buffer::BUFFER_TYPE_PHYSICAL,
         .phy_address = phy_addr_venc_yuv_buff
     };
-    rga_buffer_handle_t res = rga_buf_ctor.create_buffer(
-        svc->lf_config.width,
-        svc->lf_config.height,
-        rgba_format,
-        addr_vi_rgba,
-        &rga_vi_cvt
-    );
-    if(!res){
-        LOGE("Failed to create rga_buffer_t for vi,exiting send vi thread");
-        return;
-    }
-    res = rga_buf_ctor.create_buffer(
+
+    rga_buffer_handle_t vi_yuv_handle = rga_buf_ctor.create_buffer(
         svc->lf_config.width,
         svc->lf_config.height,
         yuv_format,
         addr_venc_yuv,
         &rga_venc_buf
     );
-    if(!res){
+    if(!vi_yuv_handle){
         LOGE("Failed to create rga_buffer_t for venc,exiting send vi thread");
         return;
     }
@@ -327,11 +303,10 @@ void MpiSvc::send_vi_frame_thread(send_vi_frame_thread_ctx * thread_ctx)
     MB_BLK vi_mb_blk = nullptr;
     IM_STATUS im_res = IM_STATUS::IM_STATUS_FAILED;
     im_rect osd_rect = {0};
-    im_osd_t osd_config = {0};
     osd::bmp_resolution size_osd{0};
     VIDEO_FRAME_INFO_S out_frame_info = {0};
     rga_buffer_handle_t osd_buffer_handle = 0;
-    rga_buffer_handle_t vi_yuv_handle = 0;
+
     while(!thread_ctx->stop_flag->load(memory_order_get)){
         if(thread_ctx->update_osd_f->load(memory_order_get)){
             osd_rgba_buffer = *thread_ctx->pixel_buffer;
@@ -373,49 +348,38 @@ void MpiSvc::send_vi_frame_thread(send_vi_frame_thread_ctx * thread_ctx)
             if(!vi_yuv_handle){
                 LOGE("failed to import vi buffer to rga exiting vi thread");
                 break;
-            }
-            im_res = imcvtcolor(
-                rga_vi_yuv,
-                rga_vi_cvt,
-                yuv_format,
-                rgba_format,
-                IM_YUV_TO_RGB_BT601_LIMIT,
-                1,
-                nullptr
-            );
-            if(im_res != IM_STATUS::IM_STATUS_SUCCESS){
-                LOGE("failed to convert vi frame yuv2rgba. error: %s",imStrError(im_res));
-                thread_ctx->vi_release_frame(mpi_handle);
-                break;
-            }
-            rga_buf_ctor.release_buffer(vi_yuv_handle);
-            thread_ctx->vi_release_frame(mpi_handle);
+            }            
             osd_rect = rga_buf::rga_buffer::get_osd_rect(
                 (int32_t)size_osd.width,
                 (int32_t)size_osd.height
             );
-            osd_config = rga_buf::rga_buffer::get_osd_config(size_osd.width);
-            im_res = imosd(rga_osd_buf,rga_vi_cvt,osd_rect,&osd_config,1,nullptr);
+            /**
+             * refer to github.com/airockchip/librga/blob/main/samples/alpha_demo/src/rga_alpha_yuv_demo.cpp
+             */
+            const im_rect prect{
+                .x = 0,
+                .y = 0,
+                .width = osd_rect.width,
+                .height = osd_rect.height
+            };
+            im_res = imcopy(rga_vi_yuv,rga_venc_buf,1,nullptr);
+
+            const int32_t imp_usage = IM_SYNC | IM_ALPHA_BLEND_DST_OVER;
+            im_res = imcheck_composite(rga_vi_yuv,rga_venc_buf,rga_osd_buf,osd_rect,osd_rect,prect);
+            if(im_res != IM_STATUS::IM_STATUS_NOERROR){
+                LOGE("imcheck_composite failed. error:%s",imStrError(im_res));
+                break;
+            }
+            im_res = improcess(rga_vi_yuv,rga_venc_buf,rga_osd_buf,osd_rect,
+                                osd_rect,prect,-1,nullptr,nullptr,imp_usage);
             if(im_res != IM_STATUS::IM_STATUS_SUCCESS){
                 LOGE("failed to impose osd. error: %s",imStrError(im_res));
                 break;
             }
-            im_res = imcvtcolor(
-                rga_vi_cvt,
-                rga_venc_buf,
-                rgba_format,
-                yuv_format,
-                IM_RGB_TO_YUV_BT601_LIMIT,
-                1,
-                nullptr
-            );
-            if(im_res != IM_STATUS::IM_STATUS_SUCCESS){
-                LOGE("failed to convert rgb2yuv. error: %s",imStrError(im_res));
-                break;
-            }
+            thread_ctx->vi_release_frame(mpi_handle);
             out_frame_info.stVFrame.pMbBlk = alloc.vir_to_handle(&venc_yuv_buffer[0]);
-            assert(out_frame_info.stVFrame.pMbBlk != 0);
             thread_ctx->venc_send_frame(mpi_handle,out_frame_info);
+            rga_buf_ctor.release_buffer(vi_yuv_handle);
         }///failed to get vi frame
         else{
             std::this_thread::sleep_for(milliseconds(500));

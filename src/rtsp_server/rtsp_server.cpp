@@ -31,7 +31,7 @@ int main(int argc, char **argv)
     LOGD("RK_MPI_SYS_Init done.");
     lf_mpi::LuckfoxMpiConfig config{};
     config.stop_flag = &stop_flag;
-    config.vi_binding = routing::MpiViBindTo::VENC;
+    config.vi_binding = routing::MpiViBindTo::OSD;
     MpiSvc& mpi_svc = MpiSvc::create_new(config);
     mpi_svc.init();
     LOGI("mpi_svc init done");
