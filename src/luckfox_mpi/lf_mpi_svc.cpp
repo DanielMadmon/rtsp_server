@@ -22,7 +22,7 @@ void lf_mpi::MpiSvc::exit_svc()
         return;
     }
     if(!svc->lf_config.stop_flag->load(memory_order_get)){
-        LOGE("called exit_svc when stop flag not set. forcing flag set!");
+        LOGW("called exit_svc when stop flag not set. forcing flag set!");
         svc->lf_config.stop_flag->store(true,memory_order_set);
     }
     svc->wait_on_exit();
@@ -42,6 +42,7 @@ void lf_mpi::MpiSvc::exit_svc()
 MpiSvc::MpiSvc(LuckfoxMpiConfig config):
     lf_config{config},
     mpi_handle{new LuckfoxMpi(config.rknn_path)},
+    _pixel_buffer(4096),
     _send_rtsp_frame_thread_ctx{
         .rtsp_event_loop = new xop::EventLoop(),
         .rtsp_server = xop::RtspServer::Create(
@@ -155,10 +156,13 @@ bool MpiSvc::init(){
     _send_vi_frame_thread_ctx.vi_release_frame = &LuckfoxMpi::vi_release_frame;
     _send_vi_frame_thread_ctx.venc_send_frame = &LuckfoxMpi::venc_send_frame;
     ret = false;
-    
+    ///TODO:make a glyph database
+    ///TODO:allow seconds displaying in OSD
+    ///TODO:allow resizing with vpss_config->venc->rtsp
+    ///TODO:allow seperate channel in venc output for file archiving to sd card
     switch (lf_config.vi_binding)
     {
-        case(MpiViBindTo::OSD):{
+        case MpiViBindTo::OSD:{
             ret = start_vi_svc();
             if(!ret){
                 LOGE("failed to start vi svc");
@@ -166,14 +170,14 @@ bool MpiSvc::init(){
             }
             break;
         }
-        case(MpiViBindTo::VENC):{
+        case MpiViBindTo::VENC:{
             ret = mpi_handle->bind_vin_venc();
             if(!ret){
                 return false;
             }
             break;
         }
-        case(MpiViBindTo::VPSS):{
+        case MpiViBindTo::VPSS:{
             LOGW("vi->vpss not yet supported!");
             ret = mpi_handle->bind_vin_vpss();
             if(!ret){
@@ -333,8 +337,7 @@ void MpiSvc::send_vi_frame_thread(send_vi_frame_thread_ctx * thread_ctx)
             std::this_thread::sleep_for(std::chrono::milliseconds(2));
             continue;
         }
-        //fetch vi->import to rga->frame2rgba->osd impose->frame2yuv->send venc
-        ///TODO: crop before conversion to rgba 
+        //fetch vi->import to rga->copy->osd impose->frame2yuv->send venc
         vi_mb_blk = thread_ctx->vi_get_frame(mpi_handle,&out_frame_info);
         if(vi_mb_blk){
             addr_vi_yuv.phy_address = alloc.into_physical_address(vi_mb_blk);
@@ -362,8 +365,9 @@ void MpiSvc::send_vi_frame_thread(send_vi_frame_thread_ctx * thread_ctx)
                 .width = osd_rect.width,
                 .height = osd_rect.height
             };
+            ///TODO: maybe there is a way to do it without copy
             im_res = imcopy(rga_vi_yuv,rga_venc_buf,1,nullptr);
-
+            
             const int32_t imp_usage = IM_SYNC | IM_ALPHA_BLEND_DST_OVER;
             im_res = imcheck_composite(rga_vi_yuv,rga_venc_buf,rga_osd_buf,osd_rect,osd_rect,prect);
             if(im_res != IM_STATUS::IM_STATUS_NOERROR){
@@ -411,7 +415,14 @@ void MpiSvc::osd_update_timer_thread(osd_update_timer_thread_ctx *thread_ctx)
     );
     if(!res){
         LOGE("failed to load ttf file. exiting timer thread");
+        return;
     }
+    
+    std::string ch_db = "abcdefghijklmnopqrstuvwxyz123456789-: ";
+    if(!thread_ctx->osd_handle->init_glyph_map(ch_db)){
+        LOGE("error. failed to init map");
+    }
+    
     AtcZoneProcessor tz_proc{0};
     AtcTimeZone tz{0};
     osd::init_local_time(
@@ -433,10 +444,11 @@ void MpiSvc::osd_update_timer_thread(osd_update_timer_thread_ctx *thread_ctx)
             if(index_sec_col != std::string::npos){
                 local_time_str.erase(index_sec_col);
             }
-            res = thread_ctx->osd_handle->render_text_rgba(
+            res = thread_ctx->osd_handle->render_text_rgba_with_glyph_map(
                 local_time_str,
                 *thread_ctx->pixel_buffer,
                 *thread_ctx->size);
+            
             if(!res){
                 LOGE("failed to get local time, exiting timer thread");
                 break;
@@ -508,6 +520,7 @@ void MpiSvc::send_rtsp_frame_thread(send_rtsp_frame_thread_ctx *thread_ctx)
             svc->mpi_handle->venc_get_stream(svc->idr_reset.load(memory_order_get),&data_len,&ts);
         if(!venc_stream || data_len == 0){
             LOGE("Failed to get venc stream");
+            raise(SIGINT);
             return;
         }
         svc->idr_reset.store(false,memory_order_set);

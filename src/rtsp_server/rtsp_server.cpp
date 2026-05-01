@@ -1,11 +1,11 @@
-﻿// RTSP Server
-#include <memory>
+﻿#include <memory>
 #include <chrono>
 #include <csignal>
 #include <atomic>
 #include "lf_mpi_svc.hpp"
 #include "routing.hpp"
 #include "config.h"
+#include "generic_log.h"
 
 using namespace lf_mpi;
 using namespace std::chrono;

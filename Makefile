@@ -30,6 +30,7 @@ RKLIBS_LIB = $(RKLIBS_ROOT)/uclibc
 LDLIBS += -L$(RKLIBS_LIB) -lrockit -lrockchip_mpp -lrkaiq -lrga ./src/acetimec/src/acetimec.a
 
 CXXFLAGS += -Og -g -fPIC -pthread -fmessage-length=0 -std=c++17 -Wall -Werror=format
+CXXFLAGS += -fconcepts
 CXXFLAGS += -DDYN_LOG  -DISP_HW_V30 -DRKPLATFORM -DUAPI2 -DRTSP_DEBUG=0
 LDFLAGS = -ldl -lm -lrt -lpthread 
 
@@ -89,5 +90,9 @@ all: $(LIB_DIR)/$(TARGET0)
 
 clean:
 	rm -rf $(BUILD_DIR)
+
+clean_lf:
+	rm -f $(OBJ_DIR)/osd.o
+	rm -f $(OBJ_DIR)/lf_mpi_svc.o
 
 .PHONY: all clean

@@ -2,6 +2,11 @@
 #include <cstdint>
 #include "rk_mpi_mmz.h"
 
+#define DEBUG_MMZ
+#ifdef DEBUG_MMZ
+#include "generic_log.h"
+#endif
+
 template<typename T>class mmz_alloc{
     public:
         using is_always_equal = std::true_type;
@@ -18,6 +23,7 @@ template<typename T>class mmz_alloc{
             (void)nb;
             MB_BLK handle = vir_to_handle(tp);
             if(!handle){
+                LOGE("tried deallocting non-mapped handle @%p, size:%d",tp,nb);
                 return;
             }
             mmz_deallocate(handle);
@@ -50,14 +56,23 @@ template<typename T>class mmz_alloc{
             MB_BLK ret = nullptr;
             int32_t res = RK_MPI_MMZ_Alloc(&ret,nb,RK_MMZ_ALLOC_TYPE_CMA|RK_MMZ_SYNC_RW);
             if(res != RK_SUCCESS || !ret){
+                #ifdef DEBUG_MMZ
+                LOGI("mmz failed to allocate %d bytes",nb);
+                #endif
                 return nullptr;
             }
             else{
+                #ifdef DEBUG_MMZ
+                LOGI("mmz allocated %d bytes at %p",nb,ret);
+                #endif
                 return ret;
             }
         }
         void mmz_deallocate(MB_BLK mb){
-            RK_MPI_MMZ_Free(mb);
+            int res = RK_MPI_MMZ_Free(mb);
+            #ifdef DEBUG_MMZ
+            LOGI("tried deallocating %p, res:%d", mb,res);
+            #endif
         }
         void* mmz_to_vir_addr(T* tp){
             return RK_MPI_MMZ_Handle2VirAddr(tp);

@@ -8,7 +8,6 @@
 #include <fstream>
 #include <errno.h>
 #include <string.h>
-#include "generic_log.h"
 #define STB_TRUETYPE_IMPLEMENTATION
 #define STB_RECT_PACK_IMPLEMENTATION
 #include "osd.hpp"
@@ -34,108 +33,70 @@ bool osd::text_osd::load_ttf_file(const std::string &ttf_file_path)
     }
     size_t file_size = font_file_handle.tellg();
     font_file_handle.seekg(0,std::ios::beg);
-    ttf_file.reserve(file_size);
-    font_file_handle.read(reinterpret_cast<char*>(&ttf_file[0]),file_size);
+    ttf_file.resize(file_size);
+    std::vector<uint8_t>tmp_buf(file_size);
+    font_file_handle.read(reinterpret_cast<char*>(&tmp_buf[0]),file_size);
+    ttf_file.swap(tmp_buf);
     if(font_file_handle.fail()){
         LOGE("failed to read ttf file, bytes read %d",font_file_handle.gcount());
         return false;
     }else{
         LOGD("read %d bytes from ttf file.",font_file_handle.gcount());
+    }
+    if(!stbtt_InitFont(&font_info,ttf_file.data(),0)){
+        LOGE("failed to initialize font");
+        return false;
+    }else{
         return true;
     }
-}
-
-
-bool osd::text_osd::render_text_rgba_noraml_alloc(const std::string &text, std::vector<uint8_t> &buffer, bmp_resolution &res)
-{
     
-    int res_stb = stbtt_InitFont(&font_info,ttf_file.data(),0);
-    if(!res_stb){
-        LOGE("failed to initialize font.");
-        return false;
-    }
-    float scale = 0.f,ascent_px = 0.f,descent_px = 0.f,total_width = 0.f,x_pos = 0.f;
-    int ascent = 0, descent = 0, line_gap = 0,glyph_idx = 0, advance_width = 0,left_bearing = 0;
-    int width = 0, height = 0;
-    //get vertical scale for current height
-    scale = stbtt_ScaleForPixelHeight(&font_info,st_font_size);
-
-    //Measure the text    
-    stbtt_GetFontVMetrics(&font_info, &ascent, &descent, &line_gap);
-    ascent_px = ascent * scale;
-    descent_px = -descent * scale;// make positive
-    
-    for(char c : text){
-        glyph_idx = stbtt_FindGlyphIndex(&font_info,c);
-        stbtt_GetGlyphHMetrics(&font_info,glyph_idx,&advance_width,&left_bearing);
-        total_width += advance_width * scale;
-    }
-    width = static_cast<int32_t>(std::ceil(total_width));
-    height = static_cast<int32_t>(std::ceil(ascent_px + descent_px));
-
-    if(width <= 0 || height <= 0){
-        LOGE("invalid width or height params for font.");
-        return false;
-    }
-    res.width = width;
-    res.height = height;
-    size_t buf_size = width * height * 4;
-    buffer.resize(buf_size);
-    for(size_t idx = 0; idx < buf_size; idx += 4){
-        buffer[idx + 3] = 255;//default alpha value
-    }
-
-    float y_baseline = ascent_px;
-    int gx0 = 0, gx1 = 0, gy0 = 0, gy1 = 0;
-    int glyph_w = 0, glyph_h = 0;
-    int dst_x = 0, dst_y = 0;
-    int px = 0, py = 0;
-    uint8_t alpha = 0;
-    size_t out_buf_idx = 0;
-    for(char c:text){
-        glyph_idx = stbtt_FindGlyphIndex(&font_info,c);
-        stbtt_GetGlyphBitmapBox(&font_info,glyph_idx,scale,scale,&gx0,&gy0,&gx1,&gy1);
-        glyph_w = gx1 - gx0;
-        glyph_h = gy1 - gy0;
-        //advance without rendering(e.g space)
-        if(glyph_w <= 0 || glyph_h <= 0){
-            stbtt_GetGlyphHMetrics(&font_info,glyph_idx,&advance_width,&left_bearing);
-            x_pos += advance_width * scale;
-            continue;
-        }
-        std::vector<uint8_t>glyph_grayscale_bmp(glyph_w * glyph_h,0);
-        stbtt_MakeGlyphBitmap(&font_info,
-                                glyph_grayscale_bmp.data(),
-                                glyph_w,glyph_h,glyph_w,
-                                scale,
-                                scale,
-                                glyph_idx);
-        dst_x = static_cast<int>(x_pos + gx0);
-        dst_y = static_cast<int>(y_baseline + gy0);
-        //convert grayscale to rgba (white on black) and fill output buffer
-        for(int y = 0; y < glyph_h; y++){
-            for(int x = 0; x < glyph_w; x++){
-                alpha = glyph_grayscale_bmp[y * glyph_w + x];
-                if(alpha == 0) continue;
-                px = dst_x + x;
-                py = dst_y + y;
-                if(px >= 0 && px < width && py >= 0 && py < height){
-                    out_buf_idx = (py * width + px) * 4;
-                    buffer[out_buf_idx] = 0;
-                    buffer[out_buf_idx + 1] = 0;
-                    buffer[out_buf_idx + 2] = 0;
-                    buffer[out_buf_idx + 3] = alpha; 
-                }
-            }//end x loop
-        }//end y loop
-        stbtt_GetGlyphHMetrics(&font_info,glyph_idx,&advance_width,&left_bearing);
-        x_pos += advance_width * scale;
-    }//end input text string iter
-    return true;
 }
 void osd::text_osd::set_font_size(uint32_t size)
 {
     st_font_size = size;
+}
+
+bool osd::text_osd::init_glyph_map(std::string glyphs)
+{
+    font_scale = stbtt_ScaleForPixelHeight(&font_info,(float)st_font_size);
+    font_atlas.resize(512 * 512);
+    if(!stbtt_PackBegin(&font_pack_ctx,font_atlas.data(),font_atlas_w,font_atlas_h,0,1,nullptr)){
+        LOGE("in %s. failed begin packing",__FUNCTION__);
+        return false;
+    }
+    stbtt_PackSetOversampling(&font_pack_ctx,1,1);
+    stbtt_pack_range range = {static_cast<float>(st_font_size), char_begin, NULL, char_num, chardata};
+    stbtt_PackFontRanges(&font_pack_ctx, ttf_file.data(), 0, &range, 1);
+    stbtt_PackEnd(&font_pack_ctx);
+    return true;
+}
+
+size_t osd::text_osd::get_pxbuf_size(const std::string& text,bmp_resolution& res){
+    int ascent, descent, linegap;
+    stbtt_GetFontVMetrics(&font_info, &ascent, &descent, &linegap);  // EM units
+    float line_height = (ascent - descent + linegap) * font_scale;  // Pixels
+    float x = 0;
+    int prev = 0;
+    for (char c : text) {
+        int advance, lsb;
+        stbtt_GetCodepointHMetrics(&font_info, c, &advance, &lsb);
+        x += advance * font_scale;
+        int kern = stbtt_GetCodepointKernAdvance(&font_info, prev,c);
+        x += kern * font_scale;
+        prev = c;
+    }
+    x = (x + 16.0 * 2);
+    line_height = (line_height + 4 * 2);
+    res.width = static_cast<int32_t>(ceilf(x));
+    res.width = res.width % 4 == 0 ? res.width : res.width + res.width % 4;
+    res.height = static_cast<int32_t>(ceilf(line_height));
+    res.height = res.height % 4 == 0 ? res.height : res.height + res.height % 4;
+    return res.width * res.height * RGBA_SIZE;
+}
+
+
+void osd::text_osd::init_font_size_info(){
+    
 }
 
 bool osd::save_rgba_to_bmp(const char* filename, uint8_t* buffer,bmp_resolution& res)
@@ -174,34 +135,3 @@ void osd::init_local_time(const AtcZoneInfo* zone_info,AtcZoneProcessor* process
     atc_set_current_epoch_year(1970);
 }
 
-void osd::flag_atomic::clear_update()
-{
-    flag.store(false,std::memory_order_release);
-}
-
-void osd::flag_atomic::set_update()
-{
-    flag.store(true,std::memory_order_relaxed);
-}
-
-
-void osd::flag_atomic::wait_update()
-{
-    while (!flag.load(std::memory_order_acquire)) {}
-}
-
-void osd::flag_atomic::wait_clear()
-{
-    while(flag.load(std::memory_order_acquire)){}
-}
-
-bool osd::flag_atomic::is_clear()
-{
-    if(!flag.load(std::memory_order_release))
-        return true;
-    return false;
-}
-bool osd::flag_atomic::is_set()
-{
-    return flag.load(std::memory_order_release);
-}
