@@ -25,8 +25,8 @@ namespace osd{
     };
     struct font_size_info{
         std::vector<__font_size_info>size_info;
-        int32_t char_begin;
-        int32_t char_num;
+        int32_t char_begin = 32;
+        int32_t char_num = 95;
         float line_height;
         float scale;
         float x_padding = 16.0;
@@ -49,8 +49,6 @@ namespace osd{
             int st_space_char_width = 32;
             uint8_t st_default_alpha = 0xff;
             uint8_t st_default_rgb   = 0;
-            const int32_t char_begin = 32;
-            const int32_t char_num   = 95;
             const int32_t font_atlas_w = 512;
             const int32_t font_atlas_h = 512;
             stbtt_packedchar chardata[95]{0};

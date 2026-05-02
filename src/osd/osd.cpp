@@ -65,10 +65,10 @@ bool osd::text_osd::init_glyph_map(std::string glyphs)
         return false;
     }
     stbtt_PackSetOversampling(&font_pack_ctx,1,1);
-    stbtt_pack_range range = {static_cast<float>(st_font_size), char_begin, NULL, char_num, chardata};
+    stbtt_pack_range range = {static_cast<float>(st_font_size), m_font_size_info.char_begin, NULL, m_font_size_info.char_num, chardata};
     stbtt_PackFontRanges(&font_pack_ctx, ttf_file.data(), 0, &range, 1);
     stbtt_PackEnd(&font_pack_ctx);
-    return init_font_size_info(char_begin,char_num,font_scale);
+    return init_font_size_info(m_font_size_info.char_begin,m_font_size_info.char_num,font_scale);
 }
 
 size_t osd::text_osd::get_pxbuf_size(const std::string& text,bmp_resolution& res){
