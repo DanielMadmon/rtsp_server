@@ -156,8 +156,6 @@ bool MpiSvc::init(){
     _send_vi_frame_thread_ctx.vi_release_frame = &LuckfoxMpi::vi_release_frame;
     _send_vi_frame_thread_ctx.venc_send_frame = &LuckfoxMpi::venc_send_frame;
     ret = false;
-    ///TODO:make a glyph database
-    ///TODO:allow seconds displaying in OSD
     ///TODO:allow resizing with vpss_config->venc->rtsp
     ///TODO:allow seperate channel in venc output for file archiving to sd card
     switch (lf_config.vi_binding)
@@ -432,18 +430,10 @@ void MpiSvc::osd_update_timer_thread(osd_update_timer_thread_ctx *thread_ctx)
     );
     time_t raw_time = 0;
     std::string local_time_str;
-    time_t next_minute = 0;
-    ///the index of the seconds colon
-    size_t index_sec_col = 0;
     while(!thread_ctx->stop_flag->load(memory_order_get)){
         if(!thread_ctx->update_osd_f->load(memory_order_get)) //cleared by send_vi_frame_thread
         {
             local_time_str = osd::get_local_time(tz,raw_time);
-            ///remove seconds. we only want to show YYYY:MM:DD hh:mm
-            index_sec_col = local_time_str.find_last_of(':');
-            if(index_sec_col != std::string::npos){
-                local_time_str.erase(index_sec_col);
-            }
             res = thread_ctx->osd_handle->render_text_rgba_with_glyph_map(
                 local_time_str,
                 *thread_ctx->pixel_buffer,
@@ -454,12 +444,12 @@ void MpiSvc::osd_update_timer_thread(osd_update_timer_thread_ctx *thread_ctx)
                 break;
             }
             thread_ctx->update_osd_f->store(true,memory_order_set);
-            next_minute = utils_get_next_minute(raw_time);
-            while(std::chrono::system_clock::now() < 
-                  std::chrono::system_clock::from_time_t(next_minute)){
+            int64_t ms_passed = 0;
+            while(ms_passed < 1000){
                 if(thread_ctx->stop_flag->load(memory_order_get)){
                     break;
                 }
+                ms_passed += 10;
                 std::this_thread::sleep_for(milliseconds(10));
             }
         }///update osd flag not cleared

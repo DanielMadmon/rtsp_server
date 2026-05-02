@@ -10,6 +10,7 @@
 #include "generic_log.h"
 #include "utils.hpp"
 #include "stb_image_write.h"
+
 namespace osd{
     constexpr char SPACE_CHAR = ' ';
     constexpr size_t RGBA_SIZE = 4;
