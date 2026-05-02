@@ -35,25 +35,6 @@ namespace osd{
     };
     void init_local_time(const AtcZoneInfo* zone_info,AtcZoneProcessor* processor, AtcTimeZone* tz);
     class text_osd{
-        private:
-            size_t get_pxbuf_size(const std::string& text,bmp_resolution& res);
-            size_t get_pxbuf_size_pre_calc(const struct font_size_info& szi,const std::string& text, bmp_resolution& res);
-            bool init_font_size_info(const int32_t& char_begin, const int32_t& char_num,float scale);
-            std::vector<uint8_t> ttf_file;
-            /// font size in vertical pixels(i.e height)
-            uint32_t st_font_size = 16;  
-            stbtt_fontinfo font_info = {0};
-            stbtt_pack_context font_pack_ctx{};   
-            stbrp_context pack_ctx;
-            std::vector<uint8_t>font_atlas{};
-            float font_scale = 0.0;
-            int st_space_char_width = 32;
-            uint8_t st_default_alpha = 0xff;
-            uint8_t st_default_rgb   = 0;
-            const int32_t font_atlas_w = 512;
-            const int32_t font_atlas_h = 512;
-            stbtt_packedchar chardata[95]{0};
-            struct font_size_info m_font_size_info{};
         public:
             text_osd(uint32_t font_size);
             ~text_osd();
@@ -227,7 +208,25 @@ namespace osd{
                 }
                 return true;
             }
-
+        private:
+            size_t get_pxbuf_size(const std::string& text,bmp_resolution& res);
+            size_t get_pxbuf_size_pre_calc(const struct font_size_info& szi,const std::string& text, bmp_resolution& res);
+            bool init_font_size_info(const int32_t& char_begin, const int32_t& char_num,float scale);
+            std::vector<uint8_t> ttf_file;
+            /// font size in vertical pixels(i.e height)
+            uint32_t st_font_size = 16;  
+            stbtt_fontinfo font_info = {0};
+            stbtt_pack_context font_pack_ctx{};   
+            stbrp_context pack_ctx;
+            std::vector<uint8_t>font_atlas{};
+            float font_scale = 0.0;
+            int st_space_char_width = 32;
+            uint8_t st_default_alpha = 0xff;
+            uint8_t st_default_rgb   = 0;
+            const int32_t font_atlas_w = 512;
+            const int32_t font_atlas_h = 512;
+            stbtt_packedchar chardata[95]{0};
+            struct font_size_info m_font_size_info{};
     };
 
 
