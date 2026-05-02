@@ -18,7 +18,9 @@ namespace osd{
         int32_t height;
     }bmp_resolution;
     struct __font_size_info{
+        /// unscaled x distance between glyphs
         int32_t advance;
+        /// currently unused. unscaled x distance between current glyph begin to current glyph end
         int32_t lsb;
     };
     struct font_size_info{
@@ -26,12 +28,16 @@ namespace osd{
         int32_t char_begin;
         int32_t char_num;
         float line_height;
+        float scale;
+        float x_padding = 16.0;
+        float y_padding = 4.0;
     };
     void init_local_time(const AtcZoneInfo* zone_info,AtcZoneProcessor* processor, AtcTimeZone* tz);
     class text_osd{
         private:
             size_t get_pxbuf_size(const std::string& text,bmp_resolution& res);
-            void init_font_size_info();
+            size_t get_pxbuf_size_pre_calc(const struct font_size_info& szi,const std::string& text, bmp_resolution& res);
+            bool init_font_size_info(const int32_t& char_begin, const int32_t& char_num,float scale);
             std::vector<uint8_t> ttf_file;
             /// font size in vertical pixels(i.e height)
             uint32_t st_font_size = 16;  
@@ -48,7 +54,7 @@ namespace osd{
             const int32_t font_atlas_w = 512;
             const int32_t font_atlas_h = 512;
             stbtt_packedchar chardata[95]{0};
-            struct font_size_info font_size_info{};
+            struct font_size_info m_font_size_info{};
         public:
             text_osd(uint32_t font_size);
             ~text_osd();
@@ -58,6 +64,10 @@ namespace osd{
             template <typename CharType>
             int32_t get_char_idx(CharType ch){
                 return ch - char_begin;
+            }
+            template<typename CharType>
+            size_t get_char_idx(CharType ch,const struct font_size_info& szi){
+                return ch - szi.char_begin;
             }
             template<typename Alloc>
             bool render_text_rgba(std::string& text,
@@ -147,13 +157,9 @@ namespace osd{
             template<typename Alloc>
             bool render_text_rgba_with_glyph_map(const std::string& text,
                                   std::vector<uint8_t,Alloc>& buffer,bmp_resolution& res){
-                size_t comp_buf_size = get_pxbuf_size(text,res);
-                LOGD("comp_buf_size:%d",comp_buf_size);
+                size_t buf_size = get_pxbuf_size_pre_calc(m_font_size_info,text,res);
                 const size_t width = res.width;
                 const size_t height = res.height;
-                const size_t buf_size = comp_buf_size;
-                res.height = height;
-                res.width = width;
                 try{
                     buffer.resize(buf_size);
                 }catch(const std::bad_alloc& e){
@@ -220,7 +226,6 @@ namespace osd{
                         }
                     }
                 }
-                save_rgba_to_bmp("/mnt/sdcard/osd.bmp",buffer.data(),res);
                 return true;
             }
 

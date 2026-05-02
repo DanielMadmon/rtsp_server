@@ -68,7 +68,7 @@ bool osd::text_osd::init_glyph_map(std::string glyphs)
     stbtt_pack_range range = {static_cast<float>(st_font_size), char_begin, NULL, char_num, chardata};
     stbtt_PackFontRanges(&font_pack_ctx, ttf_file.data(), 0, &range, 1);
     stbtt_PackEnd(&font_pack_ctx);
-    return true;
+    return init_font_size_info(char_begin,char_num,font_scale);
 }
 
 size_t osd::text_osd::get_pxbuf_size(const std::string& text,bmp_resolution& res){
@@ -82,6 +82,7 @@ size_t osd::text_osd::get_pxbuf_size(const std::string& text,bmp_resolution& res
         stbtt_GetCodepointHMetrics(&font_info, c, &advance, &lsb);
         x += advance * font_scale;
         int kern = stbtt_GetCodepointKernAdvance(&font_info, prev,c);
+        LOGD("lsb:%d",lsb);
         x += kern * font_scale;
         prev = c;
     }
@@ -95,8 +96,47 @@ size_t osd::text_osd::get_pxbuf_size(const std::string& text,bmp_resolution& res
 }
 
 
-void osd::text_osd::init_font_size_info(){
-    
+bool osd::text_osd::init_font_size_info(const int32_t& char_begin, const int32_t& char_num,float scale){
+    int ascent, descent, linegap;
+    stbtt_GetFontVMetrics(&font_info, &ascent, &descent, &linegap);  // EM units
+    m_font_size_info.scale = scale;
+    m_font_size_info.line_height = (ascent - descent + linegap) * font_scale;
+    m_font_size_info.char_begin = char_begin;
+    m_font_size_info.char_num = char_num;
+    const size_t num_chars = m_font_size_info.char_num - m_font_size_info.char_begin;
+    try{
+        m_font_size_info.size_info.resize(num_chars);
+    }catch(const std::bad_alloc& e){
+        LOGE("%s.%s,%d",e.what(),__FUNCTION__,__LINE__);
+        return false;
+    }
+    int32_t advance = 0, lsb = 0;
+    for(size_t i = 0; i < num_chars; ++i){
+        stbtt_GetCodepointHMetrics(&font_info, i + m_font_size_info.char_begin, &advance, &lsb);
+        m_font_size_info.size_info[i].advance = advance;
+        m_font_size_info.size_info[i].lsb = lsb;
+    }
+    return true;
+}
+
+size_t osd::text_osd::get_pxbuf_size_pre_calc(const struct font_size_info& szi,
+                                              const std::string& text, bmp_resolution& res){
+    float x = 0.0f;
+    for(char c : text){
+        if(c < szi.char_begin + szi.char_num && c >= szi.char_begin){
+            size_t idx = c - get_char_idx(c,szi);
+            x += szi.size_info[idx].advance * szi.scale;
+        }
+    }
+    x = (x + szi.x_padding * 2);
+    float y = szi.line_height + szi.y_padding * 2; 
+    int32_t width = static_cast<int32_t>(ceil(x));
+    int32_t height = static_cast<int32_t>(ceil(y));
+    width = (width + 3) &~ 0x03;
+    height = (height + 3) &~ 0x03;
+    res.width = width;
+    res.height = height;
+    return width * height * RGBA_SIZE;
 }
 
 bool osd::save_rgba_to_bmp(const char* filename, uint8_t* buffer,bmp_resolution& res)
