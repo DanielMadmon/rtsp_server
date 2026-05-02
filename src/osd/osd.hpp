@@ -61,7 +61,7 @@ namespace osd{
             bool init_glyph_map(std::string glyphs);
             template <typename CharType>
             int32_t get_char_idx(CharType ch){
-                return ch - char_begin;
+                return ch - m_font_size_info.char_begin;
             }
             template<typename CharType>
             size_t get_char_idx(CharType ch,const struct font_size_info& szi){
