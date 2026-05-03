@@ -7,9 +7,7 @@ namespace routing{
         /// osd receiver which uses LuckoxMpi::vi_get_frame
         OSD,
         /// receiver is hardware video encoder.
-        VENC,
-        /// receiver is video processing subsystem
-        VPSS,
+        VENC
     };
 }
 }

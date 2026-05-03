@@ -4,7 +4,8 @@
 #include "LuckfoxMpi.hpp"
 #include "RtspServer.h"
 #include "lf_types.hpp"
-
+#include "rga_buffer.hpp"
+#include "optional"
 
 namespace lf_mpi{
 
@@ -12,6 +13,8 @@ namespace lf_mpi{
     /// streaming from camera to video encoder and from video
     /// encoder to rtsp server
     class MpiSvc{
+        /// Rotation settings
+        
         using u8_vec_mmz =  std::vector<uint8_t,mmz_alloc<uint8_t>>;
         public:
         /// @brief create a new lf_mpi_svc instatnce. 
@@ -48,6 +51,9 @@ namespace lf_mpi{
             static inline time_t utils_get_next_minute(time_t start_time);
             bool start_vi_svc();
             bool start_rtsp_svc();
+            void set_venc_res(send_vi_frame_thread_ctx& ctx);
+            bool init_vi_transform(struct frame_transform_ctx& ctx);
+            TransformResult apply_vi_transform(struct frame_transform_ctx& ctx,rga_buffer_t& rga_vi_yuv);
             //vars
             inline static MpiSvc* svc_instance = nullptr;
             u8_vec_mmz _pixel_buffer{};
@@ -56,7 +62,9 @@ namespace lf_mpi{
             send_rtsp_frame_thread_ctx _send_rtsp_frame_thread_ctx = {0};
             osd_update_timer_thread_ctx _osd_update_timer_thread_ctx = {0};
             send_vi_frame_thread_ctx _send_vi_frame_thread_ctx;
+            struct frame_transform_ctx transfrom_ctx{};
             flag init_done{false};
+
             inline static flag idr_reset {true};
             inline static flag client_conn_flag {false};
             inline static constexpr size_t rtsp_buffer_size = 400 * 1024;

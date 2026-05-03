@@ -64,7 +64,10 @@ void rga_buf::rga_buffer::release_buffer(rga_buffer_handle_t handle)
     if(f_res != rga_buffer_handles.end()){
         releasebuffer_handle(handle);
         rga_buffer_handles.erase(f_res);
+        return;
     }
+    releasebuffer_handle(handle);
+
 }
 
 size_t rga_buf::rga_buffer::get_buffer_size(uint32_t width, uint32_t height, RgaSURF_FORMAT format)

@@ -2,7 +2,6 @@
 #include <cstdint>
 #include "rk_mpi_mmz.h"
 
-#define DEBUG_MMZ
 #ifdef DEBUG_MMZ
 #include "generic_log.h"
 #endif
@@ -17,13 +16,15 @@ template<typename T>class mmz_alloc{
             if(ptr){
                 return into_virtual_address(ptr);
             }
-            return ptr;
+            throw std::bad_alloc();
         }
         void deallocate(T* tp,std::size_t nb) noexcept{
             (void)nb;
             MB_BLK handle = vir_to_handle(tp);
             if(!handle){
+                #ifdef DEBUG_MMZ
                 LOGE("tried deallocting non-mapped handle @%p, size:%d",tp,nb);
+                #endif
                 return;
             }
             mmz_deallocate(handle);
@@ -54,7 +55,8 @@ template<typename T>class mmz_alloc{
     private:
         void* mmz_allocate(std::size_t nb){
             MB_BLK ret = nullptr;
-            int32_t res = RK_MPI_MMZ_Alloc(&ret,nb,RK_MMZ_ALLOC_TYPE_CMA|RK_MMZ_SYNC_RW);
+            [[maybe_unused]]int32_t res;
+            res = RK_MPI_MMZ_Alloc(&ret,nb,RK_MMZ_ALLOC_TYPE_CMA|RK_MMZ_SYNC_RW);
             if(res != RK_SUCCESS || !ret){
                 #ifdef DEBUG_MMZ
                 LOGI("mmz failed to allocate %d bytes",nb);
@@ -69,7 +71,7 @@ template<typename T>class mmz_alloc{
             }
         }
         void mmz_deallocate(MB_BLK mb){
-            int res = RK_MPI_MMZ_Free(mb);
+            [[maybe_unused]]int res = RK_MPI_MMZ_Free(mb);
             #ifdef DEBUG_MMZ
             LOGI("tried deallocating %p, res:%d", mb,res);
             #endif

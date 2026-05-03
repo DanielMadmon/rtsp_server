@@ -31,7 +31,7 @@ LDLIBS += -L$(RKLIBS_LIB) -lrockit -lrockchip_mpp -lrkaiq -lrga ./src/acetimec/s
 
 CXXFLAGS += -Og -g -fPIC -pthread -fmessage-length=0 -std=c++17 -Wall -Werror=format
 CXXFLAGS += -fconcepts
-CXXFLAGS += -DDYN_LOG  -DISP_HW_V30 -DRKPLATFORM -DUAPI2 -DRTSP_DEBUG=0
+CXXFLAGS += -DDYN_LOG  -DISP_HW_V30 -DRKPLATFORM -DUAPI2 -DRTSP_DEBUG=0 -DDEBUG_MMZ
 LDFLAGS = -ldl -lm -lrt -lpthread 
 
 $(shell mkdir -p $(LIB_DIR) $(OBJ_DIR))

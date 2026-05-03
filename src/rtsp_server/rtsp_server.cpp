@@ -31,6 +31,11 @@ int main(int argc, char **argv)
     LOGD("RK_MPI_SYS_Init done.");
     lf_mpi::LuckfoxMpiConfig config{};
     config.stop_flag = &stop_flag;
+    config.resize_vi_frame = true;
+    config.rotate_vi_frame = false;
+    config.rotation_opts = ROT_90;
+    config.resize_or_crop_width = 1280;
+    config.resize_or_crop_height = 720;
     config.vi_binding = routing::MpiViBindTo::OSD;
     MpiSvc& mpi_svc = MpiSvc::create_new(config);
     mpi_svc.init();

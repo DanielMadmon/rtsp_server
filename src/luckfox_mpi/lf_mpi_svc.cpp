@@ -1,6 +1,5 @@
 #include <memory>
 #include <chrono>
-#include "rga_buffer.hpp"
 #include "lf_mpi_svc.hpp"
 #include "lf_types.hpp"
 #include "generic_log.h"
@@ -105,10 +104,15 @@ bool MpiSvc::init(){
         LOGE("failed on init_video_in");
         return ret;
     }
+    set_venc_res(_send_vi_frame_thread_ctx);
+    if(!init_vi_transform(transfrom_ctx)){
+        LOGE("failed to init vi transform");
+        return false;
+    }
     ret = mpi_handle->init_video_encoder(
         RK_VIDEO_ID_HEVC,
-        lf_config.width,
-        lf_config.height
+        _send_vi_frame_thread_ctx.venc_frame_res.width,
+        _send_vi_frame_thread_ctx.venc_frame_res.height
     );
     if(!ret){
         LOGE("failed on init video encoder");
@@ -170,14 +174,6 @@ bool MpiSvc::init(){
         }
         case MpiViBindTo::VENC:{
             ret = mpi_handle->bind_vin_venc();
-            if(!ret){
-                return false;
-            }
-            break;
-        }
-        case MpiViBindTo::VPSS:{
-            LOGW("vi->vpss not yet supported!");
-            ret = mpi_handle->bind_vin_vpss();
             if(!ret){
                 return false;
             }
@@ -265,8 +261,8 @@ void MpiSvc::send_vi_frame_thread(send_vi_frame_thread_ctx * thread_ctx)
     }
     auto mpi_handle = std::ref(*svc->mpi_handle);
     size_t venc_yuv_buffer_size = rga_buf_ctor.get_buffer_size(
-        svc->lf_config.width,
-        svc->lf_config.height,
+        static_cast<uint32_t>(thread_ctx->venc_frame_res.width),
+        static_cast<uint32_t>(thread_ctx->venc_frame_res.height),
         yuv_format
     );
     px_vec venc_yuv_buffer(venc_yuv_buffer_size);
@@ -291,8 +287,8 @@ void MpiSvc::send_vi_frame_thread(send_vi_frame_thread_ctx * thread_ctx)
     };
 
     rga_buffer_handle_t vi_yuv_handle = rga_buf_ctor.create_buffer(
-        svc->lf_config.width,
-        svc->lf_config.height,
+        static_cast<uint32_t>(thread_ctx->venc_frame_res.width),
+        static_cast<uint32_t>(thread_ctx->venc_frame_res.height),
         yuv_format,
         addr_venc_yuv,
         &rga_venc_buf
@@ -349,7 +345,14 @@ void MpiSvc::send_vi_frame_thread(send_vi_frame_thread_ctx * thread_ctx)
             if(!vi_yuv_handle){
                 LOGE("failed to import vi buffer to rga exiting vi thread");
                 break;
-            }            
+            }      
+            if(svc->transfrom_ctx.init_done){
+                TransformResult tres = svc->apply_vi_transform(svc->transfrom_ctx,rga_vi_yuv);
+                if(tres.ok){
+                    rga_buf_ctor.release_buffer(rga_vi_yuv.handle);
+                    rga_vi_yuv = tres.rga_buffer;
+                }
+            }      
             osd_rect = rga_buf::rga_buffer::get_osd_rect(
                 (int32_t)size_osd.width,
                 (int32_t)size_osd.height
@@ -380,8 +383,11 @@ void MpiSvc::send_vi_frame_thread(send_vi_frame_thread_ctx * thread_ctx)
             }
             thread_ctx->vi_release_frame(mpi_handle);
             out_frame_info.stVFrame.pMbBlk = alloc.vir_to_handle(&venc_yuv_buffer[0]);
+            out_frame_info.stVFrame.u32Width = rga_vi_yuv.width;
+            out_frame_info.stVFrame.u32Height = rga_vi_yuv.height;
+            out_frame_info.stVFrame.u32VirWidth = rga_vi_yuv.width;
+            out_frame_info.stVFrame.u32VirHeight = rga_vi_yuv.height;
             thread_ctx->venc_send_frame(mpi_handle,out_frame_info);
-            rga_buf_ctor.release_buffer(vi_yuv_handle);
         }///failed to get vi frame
         else{
             std::this_thread::sleep_for(milliseconds(500));
@@ -420,7 +426,7 @@ void MpiSvc::osd_update_timer_thread(osd_update_timer_thread_ctx *thread_ctx)
     if(!thread_ctx->osd_handle->init_glyph_map(ch_db)){
         LOGE("error. failed to init map");
     }
-    
+    svc->_pixel_buffer.resize(500*64*4);
     AtcZoneProcessor tz_proc{0};
     AtcTimeZone tz{0};
     osd::init_local_time(
@@ -518,6 +524,210 @@ void MpiSvc::send_rtsp_frame_thread(send_rtsp_frame_thread_ctx *thread_ctx)
         video_frame.buffer.reset(venc_stream,lf_mpi::VencStreamDeleter{svc->mpi_handle});
         xop::H265Source::GetTimestamp(&video_frame.timeNow,&video_frame.timestamp);
         thread_ctx->rtsp_server->PushFrame(thread_ctx->session_id,xop::channel_0,video_frame);
+    }
+}
+
+
+/// TODO: fix cropping not working
+/// TODO: fix resizing not working
+bool MpiSvc::init_vi_transform(struct frame_transform_ctx& ctx){
+    using frame_size = osd::bmp_resolution;
+    using address = rga_buf::rga_buffer::rga_buf_addr_t;
+    using address_type = rga_buf::rga_buffer::rga_buffer_type_t;
+
+    bool vi_transform = lf_config.crop_vi_frame || lf_config.resize_vi_frame || lf_config.rotate_vi_frame;
+    bool crop_and_rotate = lf_config.crop_vi_frame && lf_config.rotate_vi_frame;
+    bool resize_and_rotate = lf_config.resize_vi_frame && lf_config.rotate_vi_frame;
+    if(ctx.init_done || !vi_transform){
+       return true;
+    }
+    if(_send_vi_frame_thread_ctx.venc_frame_res.width == 0 || 
+        _send_vi_frame_thread_ctx.venc_frame_res.height == 0){
+            LOGE("must call set_venc_res before init_vi_transform");
+            ctx.init_done = false;
+            return false;
+    }
+    bool alloc_dst{},alloc_rot_dst{};
+    frame_size dst_fsz{},rot_dst_fsz{};
+    //pre-allocate rga_buffer_t
+    //pre-allocate rga_buffer_vectors
+    if(lf_config.rotate_vi_frame && !crop_and_rotate && !resize_and_rotate){
+        alloc_rot_dst = true;
+        rot_dst_fsz = _send_vi_frame_thread_ctx.venc_frame_res;
+    }else{
+        alloc_dst = true;
+        dst_fsz.assign_from_u32(lf_config.resize_or_crop_width,lf_config.resize_or_crop_height);
+        alloc_rot_dst = true;
+        rot_dst_fsz = _send_vi_frame_thread_ctx.venc_frame_res;
+    }
+
+    size_t vec_size = 0;
+    if(alloc_rot_dst){
+        vec_size = ctx.rga_buf_ctor.get_buffer_size(
+            static_cast<uint32_t>(rot_dst_fsz.width),
+            static_cast<uint32_t>(rot_dst_fsz.height),
+            YUV_RGA_FORMAT
+        );
+        try{
+            ctx.rot_dst_vec.resize(vec_size);
+        }catch(const std::bad_alloc& e){
+            LOGE("%s,%s,%d",e.what(),__FUNCTION__,__LINE__);
+            ctx.init_done = false;
+            return false;
+        }
+        address dst_addr{
+            .buffer_type = address_type::BUFFER_TYPE_PHYSICAL,
+            .phy_address = ctx.rot_dst_vec.get_allocator().virtual_to_physical_address(ctx.rot_dst_vec.data())
+        };
+        ctx.rot_dst_handle = ctx.rga_buf_ctor.create_buffer(
+            static_cast<uint32_t>(rot_dst_fsz.width),
+            static_cast<uint32_t>(rot_dst_fsz.height),
+            YUV_RGA_FORMAT,
+            dst_addr,
+            &ctx.rot_dst_buf
+        );
+        if(!ctx.rot_dst_handle){
+            ctx.init_done = false;
+            return false;
+        }
+    }
+    if(alloc_dst){
+        vec_size = ctx.rga_buf_ctor.get_buffer_size(
+            static_cast<uint32_t>(dst_fsz.width),
+            static_cast<uint32_t>(dst_fsz.height),
+            YUV_RGA_FORMAT
+        );
+        try{
+            ctx.dst_vec.resize(vec_size);
+        }catch(const std::bad_alloc& e){
+            LOGE("%s,%s,%d",e.what(),__FUNCTION__,__LINE__);
+            ctx.init_done = false;
+            return false;
+        }
+        address dst_addr{
+            .buffer_type = address_type::BUFFER_TYPE_PHYSICAL,
+            .phy_address = ctx.dst_vec.get_allocator().virtual_to_physical_address(ctx.dst_vec.data())
+        };
+        ctx.dst_handle = ctx.rga_buf_ctor.create_buffer(
+            static_cast<uint32_t>(dst_fsz.width),
+            static_cast<uint32_t>(dst_fsz.height),
+            YUV_RGA_FORMAT,
+            dst_addr,
+            &ctx.dst_buf
+        );
+        if(!ctx.dst_handle){
+            ctx.init_done = false;
+            return false;
+        }
+    }
+    ctx.crop_and_rotate = crop_and_rotate;
+    ctx.resize_and_rotate = resize_and_rotate;
+    ctx.rotate = lf_config.rotate_vi_frame;
+    ctx.init_done = true;
+    return true;
+}
+
+TransformResult MpiSvc::apply_vi_transform(struct frame_transform_ctx& ctx,rga_buffer_t& rga_vi_yuv){
+    if(!ctx.init_done || !rga_vi_yuv.handle){
+        return TransformResult();
+    }
+    IM_STATUS status = IM_STATUS::IM_STATUS_FAILED;
+    if(ctx.crop_and_rotate){
+        im_rect crop_rect{
+            .x = static_cast<int>(lf_config.crop_x),
+            .y = static_cast<int>(lf_config.crop_y),
+            .width = ctx.dst_buf.width,
+            .height = ctx.dst_buf.height
+        };
+        status = imcrop(
+            rga_vi_yuv,
+            ctx.dst_buf,
+            crop_rect,
+            1,
+            nullptr
+        );
+        if(status != IM_STATUS::IM_STATUS_SUCCESS){
+            LOGE("crop failed. %s",imStrError(status));
+            return TransformResult();
+        }
+        status = imrotate(
+            ctx.dst_buf,
+            ctx.rot_dst_buf,
+            lf_config.rotation_opts,
+            1,
+            nullptr
+        );
+        if(status != IM_STATUS::IM_STATUS_SUCCESS){
+            return TransformResult();
+        }
+        return TransformResult(ctx.rot_dst_buf,true);
+    }else if(ctx.resize_and_rotate){
+        status = imresize(
+            rga_vi_yuv,
+            ctx.dst_buf,
+            0,
+            0,
+            IM_INTERP_DEFAULT,
+            1,
+            nullptr
+        );
+        if(status != IM_STATUS::IM_STATUS_SUCCESS){
+            LOGE("imresize failed. %s",imStrError(status));
+            return TransformResult();
+        }
+        status = imrotate(
+            ctx.dst_buf,
+            ctx.rot_dst_buf,
+            lf_config.rotation_opts,
+            1,
+            nullptr
+        );
+        if(status != IM_STATUS::IM_STATUS_SUCCESS){
+            return TransformResult();
+        }
+        return TransformResult(ctx.rot_dst_buf,true);
+    }else if(ctx.rotate){
+        status = imrotate(
+            rga_vi_yuv,
+            ctx.rot_dst_buf,
+            lf_config.rotation_opts,
+            1,
+            nullptr
+        );
+        if(status != IM_STATUS::IM_STATUS_SUCCESS){
+            LOGE("imrotate failed.%s",imStrError(status));
+            return TransformResult();
+        }
+        return TransformResult(ctx.rot_dst_buf,true);
+    }else{
+        return TransformResult();
+    }
+}
+
+void MpiSvc::set_venc_res(send_vi_frame_thread_ctx& ctx){
+    bool vi_transform = lf_config.crop_vi_frame || lf_config.resize_vi_frame || lf_config.rotate_vi_frame;
+    bool crop_and_rotate = lf_config.crop_vi_frame && lf_config.rotate_vi_frame;
+    bool resize_and_rotate = lf_config.resize_vi_frame && lf_config.rotate_vi_frame;
+    if(vi_transform){
+        if(crop_and_rotate || resize_and_rotate){
+            if(lf_config.rotation_opts == ROT_90 || lf_config.rotation_opts == ROT_270){
+                ctx.venc_frame_res.assign_from_u32(lf_config.resize_or_crop_height,lf_config.resize_or_crop_width);
+            }else{
+                ctx.venc_frame_res.assign_from_u32(lf_config.resize_or_crop_width,lf_config.resize_or_crop_height);
+            }
+        }else if(lf_config.resize_vi_frame || lf_config.crop_vi_frame){
+           ctx.venc_frame_res.assign_from_u32(lf_config.resize_or_crop_width,lf_config.resize_or_crop_height);
+        }else if(lf_config.rotate_vi_frame){
+            if(lf_config.rotation_opts == ROT_90 || lf_config.rotation_opts == ROT_270){
+                ctx.venc_frame_res.assign_from_u32(lf_config.height,lf_config.width);
+            }else{
+                ctx.venc_frame_res.assign_from_u32(lf_config.width,lf_config.height);
+            }
+        }else{
+            ctx.venc_frame_res.assign_from_u32(lf_config.width,lf_config.height);
+        }
+    }else{
+        ctx.venc_frame_res.assign_from_u32(lf_config.width,lf_config.height);
     }
 }
 

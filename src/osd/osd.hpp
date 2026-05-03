@@ -17,6 +17,10 @@ namespace osd{
     typedef struct{
         int32_t width;
         int32_t height;
+        void assign_from_u32(uint32_t w,uint32_t h){
+            width = static_cast<int32_t>(w);
+            height = static_cast<int32_t>(h);
+        }
     }bmp_resolution;
     struct __font_size_info{
         /// unscaled x distance between glyphs
@@ -140,11 +144,13 @@ namespace osd{
                 size_t buf_size = get_pxbuf_size_pre_calc(m_font_size_info,text,res);
                 const size_t width = res.width;
                 const size_t height = res.height;
-                try{
+                if(buf_size < buffer.capacity()){
+                    try{
                     buffer.resize(buf_size);
                 }catch(const std::bad_alloc& e){
                     LOGE("%s.%s,%d",e.what(),__FUNCTION__,__LINE__);
                     return false;
+                }
                 }
                 osd_utils::vec_stride_assign(buffer,0,buf_size,std::array<uint8_t,4>{0,0,0,0xff});
                 float x = 16.0f;

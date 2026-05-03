@@ -87,6 +87,8 @@ struct RtpPacket
 		size        = 0;
 		timestamp   = 0;
 		last        = 0;
+		data = {};
+		timeNow = {0};
 	}
 
 	std::shared_ptr<uint8_t>    data;

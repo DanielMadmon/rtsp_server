@@ -69,13 +69,13 @@ void EventLoop::Loop()
 		threads_.push_back(thread);
 	}
 
-	const int priority = TASK_SCHEDULER_PRIORITY_REALTIME;
 
 	for (auto iter : threads_) 
 	{
 #if defined(__linux) || defined(__linux__) 
 
-#elif defined(WIN32) || defined(_WIN32) 
+#elif defined(WIN32) || defined(_WIN32)
+		const int priority = TASK_SCHEDULER_PRIORITY_REALTIME;
 		switch (priority) 
 		{
 		case TASK_SCHEDULER_PRIORITY_LOW:
