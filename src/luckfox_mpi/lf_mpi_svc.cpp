@@ -557,6 +557,12 @@ bool MpiSvc::init_vi_transform(struct frame_transform_ctx& ctx){
     if(lf_config.rotate_vi_frame && !crop_and_rotate && !resize_and_rotate){
         alloc_rot_dst = true;
         rot_dst_fsz = _send_vi_frame_thread_ctx.venc_frame_res;
+    }else if(lf_config.crop_vi_frame && !crop_and_rotate && !resize_and_rotate){
+        alloc_dst = true;
+        dst_fsz = _send_vi_frame_thread_ctx.venc_frame_res;
+    }else if(lf_config.resize_vi_frame && !crop_and_rotate && !resize_and_rotate){
+        alloc_dst = true;
+        dst_fsz = _send_vi_frame_thread_ctx.venc_frame_res;
     }else{
         alloc_dst = true;
         dst_fsz.assign_from_u32(lf_config.resize_or_crop_width,lf_config.resize_or_crop_height);
@@ -635,6 +641,7 @@ TransformResult MpiSvc::apply_vi_transform(struct frame_transform_ctx& ctx,rga_b
         return TransformResult();
     }
     IM_STATUS status = IM_STATUS::IM_STATUS_FAILED;
+    ///TODO: wrong maybe just crop/resize without rotating!
     if(ctx.crop_and_rotate){
         im_rect crop_rect{
             .x = static_cast<int>(lf_config.crop_x),
@@ -689,6 +696,40 @@ TransformResult MpiSvc::apply_vi_transform(struct frame_transform_ctx& ctx,rga_b
             return TransformResult();
         }
         return TransformResult(ctx.rot_dst_buf,true);
+    }else if(lf_config.crop_vi_frame){
+        im_rect crop_rect{
+            .x = static_cast<int>(lf_config.crop_x),
+            .y = static_cast<int>(lf_config.crop_y),
+            .width = ctx.dst_buf.width,
+            .height = ctx.dst_buf.height
+        };
+        status = imcrop(
+            rga_vi_yuv,
+            ctx.dst_buf,
+            crop_rect,
+            1,
+            nullptr
+        );
+        if(status != IM_STATUS::IM_STATUS_SUCCESS){
+            LOGE("crop failed. %s",imStrError(status));
+            return TransformResult();
+        }
+        return TransformResult(ctx.dst_buf,true);
+    }else if(lf_config.resize_vi_frame){
+        status = imresize(
+            rga_vi_yuv,
+            ctx.dst_buf,
+            0,
+            0,
+            IM_INTERP_DEFAULT,
+            1,
+            nullptr
+        );
+        if(status != IM_STATUS::IM_STATUS_SUCCESS){
+            LOGE("imresize failed. %s",imStrError(status));
+            return TransformResult();
+        }
+        return TransformResult(ctx.dst_buf,true);
     }else if(ctx.rotate){
         status = imrotate(
             rga_vi_yuv,
