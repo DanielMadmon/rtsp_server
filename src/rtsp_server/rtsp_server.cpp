@@ -31,8 +31,8 @@ int main(int argc, char **argv)
     LOGD("RK_MPI_SYS_Init done.");
     lf_mpi::LuckfoxMpiConfig config{};
     config.stop_flag = &stop_flag;
-    config.resize_vi_frame = true;
-    config.rotate_vi_frame = false;
+    config.resize_vi_frame = false;
+    config.rotate_vi_frame = true;
     config.rotation_opts = ROT_90;
     config.resize_or_crop_width = 1280;
     config.resize_or_crop_height = 720;

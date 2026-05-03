@@ -109,6 +109,8 @@ bool MpiSvc::init(){
         LOGE("failed to init vi transform");
         return false;
     }
+    LOGI("set venc width:%d set venc height:%d", _send_vi_frame_thread_ctx.venc_frame_res.width,
+        _send_vi_frame_thread_ctx.venc_frame_res.height);
     ret = mpi_handle->init_video_encoder(
         RK_VIDEO_ID_HEVC,
         _send_vi_frame_thread_ctx.venc_frame_res.width,
@@ -383,10 +385,10 @@ void MpiSvc::send_vi_frame_thread(send_vi_frame_thread_ctx * thread_ctx)
             }
             thread_ctx->vi_release_frame(mpi_handle);
             out_frame_info.stVFrame.pMbBlk = alloc.vir_to_handle(&venc_yuv_buffer[0]);
-            out_frame_info.stVFrame.u32Width = rga_vi_yuv.width;
-            out_frame_info.stVFrame.u32Height = rga_vi_yuv.height;
-            out_frame_info.stVFrame.u32VirWidth = rga_vi_yuv.width;
-            out_frame_info.stVFrame.u32VirHeight = rga_vi_yuv.height;
+            out_frame_info.stVFrame.u32Width = rga_venc_buf.width;
+            out_frame_info.stVFrame.u32Height = rga_venc_buf.height;
+            out_frame_info.stVFrame.u32VirWidth = rga_venc_buf.width;
+            out_frame_info.stVFrame.u32VirHeight = rga_venc_buf.height;
             thread_ctx->venc_send_frame(mpi_handle,out_frame_info);
         }///failed to get vi frame
         else{
@@ -551,6 +553,7 @@ bool MpiSvc::init_vi_transform(struct frame_transform_ctx& ctx){
     frame_size dst_fsz{},rot_dst_fsz{};
     //pre-allocate rga_buffer_t
     //pre-allocate rga_buffer_vectors
+    ///TODO: wrong maybe just crop/resize without rotating!
     if(lf_config.rotate_vi_frame && !crop_and_rotate && !resize_and_rotate){
         alloc_rot_dst = true;
         rot_dst_fsz = _send_vi_frame_thread_ctx.venc_frame_res;
