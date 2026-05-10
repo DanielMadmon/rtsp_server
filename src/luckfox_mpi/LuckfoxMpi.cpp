@@ -227,29 +227,64 @@ bool LuckfoxMpi::init_vi()
 	result |= rk_aiq_user_api2_acp_SetAttrib(mpi_ctx.video_in.aiq_ctx, &attrib);
 
     Uapi_ExpSwAttrV2_t expSwAttr;
-    expSwAttr.sync.done = false;
-    expSwAttr.AecOpType = RK_AIQ_OP_MODE_MAX;
-    //LinearAE
-    expSwAttr.stManual.LinearAE.ManualGainEn = false;
-    expSwAttr.stManual.LinearAE.ManualTimeEn = false;
-    expSwAttr.stManual.LinearAE.GainValue = 1.0f; /*gain = 1x*/
-    expSwAttr.stManual.LinearAE.TimeValue = 0.02f; /*time = 1/50s*/
+    memset(&expSwAttr,0,sizeof(expSwAttr));
+    expSwAttr.sync.sync_mode = rk_aiq_uapi_mode_sync_e::RK_AIQ_UAPI_MODE_DEFAULT;
+    expSwAttr.sync.done = true;
     expSwAttr.Enable = true;
-    expSwAttr.stAuto.LinAeRange.stExpTimeRange.Min = 1.0f / 500.0f;
-    expSwAttr.stAuto.LinAeRange.stExpTimeRange.Max = 1.0f / 50.0f;
-    expSwAttr.stAuto.LinAeRange.stGainRange.Min = 1.0f;
-    expSwAttr.stAuto.LinAeRange.stGainRange.Max = 4.0f;
-    expSwAttr.sync.sync_mode = RK_AIQ_UAPI_MODE_SYNC;
-    //HdrAE (should set all frames)
-    expSwAttr.stManual.HdrAE.ManualGainEn = false;
-    expSwAttr.stManual.HdrAE.ManualTimeEn = false;
-    expSwAttr.stManual.HdrAE.GainValue[0] = 1.0f; /*sframe gain = 1x*/
-    expSwAttr.stManual.HdrAE.TimeValue[0] = 0.002f; /*sframe time = 1/500s*/
-    expSwAttr.stManual.HdrAE.GainValue[1] = 2.0f; /*mframe gain = 2x*/
-    expSwAttr.stManual.HdrAE.TimeValue[1] = 0.01f; /*mframe time = 1/100s*/
-    expSwAttr.stManual.HdrAE.GainValue[2] = 4.0f; /*lframe gain = 4x*/
-    expSwAttr.stManual.HdrAE.TimeValue[2] = 0.02f; /*lframe time = 1/50s*/
+    expSwAttr.RawStatsMode = CalibDb_CamRawStatsModeV2_t::CAM_RAWSTATSV2_MODE_Y;
+    expSwAttr.HistStatsMode = CalibDb_CamHistStatsModeV2_t::CAM_HISTV2_MODE_Y;
+    expSwAttr.YRangeMode = CalibDb_CamYRangeModeV2_t::CAM_YRANGEV2_MODE_FULL;
+    expSwAttr.AecRunInterval = 0;
+    expSwAttr.AecOpType = RKAiqOPMode_t::RK_AIQ_OP_MODE_AUTO;
 
+    //stAuto setting
+    expSwAttr.stAuto.stAeSpeed.SmoothEn = true;
+    expSwAttr.stAuto.stAeSpeed.DampOver = 0.15f;
+    expSwAttr.stAuto.stAeSpeed.DampUnder = 0.45f;
+    expSwAttr.stAuto.stAeSpeed.DampDark2Bright = 0.15f;
+    expSwAttr.stAuto.stAeSpeed.DampBright2Dark = 0.45f;
+    expSwAttr.stAuto.stAeSpeed.DyDamp.DyDampEn = true;
+    expSwAttr.stAuto.stAeSpeed.DyDamp.SlowOPType = RKAiqOPMode_t::RK_AIQ_OP_MODE_AUTO;
+    expSwAttr.stAuto.stAeSpeed.DyDamp.SlowRange = 10.0f;
+    expSwAttr.stAuto.stAeSpeed.DyDamp.SlowDamp = 0.95f;
+    expSwAttr.stAuto.DelayType = Uapi_DelayTypeV2_t::DELAY_TYPE_FRAME;
+    expSwAttr.stAuto.BlackDelay = 2;
+    expSwAttr.stAuto.WhiteDelay = 2;
+    expSwAttr.stAuto.stFrmRate.isFpsFix = true;
+    expSwAttr.stAuto.stFrmRate.FpsValue = 0;//????
+    expSwAttr.stAuto.stAntiFlicker.enable = true;
+    expSwAttr.stAuto.stAntiFlicker.Frequency = CalibDb_FlickerFreqV2_t::AECV2_FLICKER_FREQUENCY_50HZ;
+    expSwAttr.stAuto.stAntiFlicker.Mode = CalibDb_AntiFlickerModeV2_t::AECV2_ANTIFLICKER_AUTO_MODE;
+    expSwAttr.stAuto.LinAeRange.stExpTimeRange.Min = 2.45098035520641133E-5F;
+    expSwAttr.stAuto.LinAeRange.stExpTimeRange.Max = 0.0299999993;
+    expSwAttr.stAuto.LinAeRange.stGainRange.Min = 1;
+    expSwAttr.stAuto.LinAeRange.stGainRange.Max = 512;
+    expSwAttr.stAuto.LinAeRange.stIspDGainRange.Min = 1;
+    expSwAttr.stAuto.LinAeRange.stIspDGainRange.Max = 1;
+    expSwAttr.stAuto.LinAeRange.stPIrisRange.Min = 128;
+    expSwAttr.stAuto.LinAeRange.stPIrisRange.Max = 512;
+    expSwAttr.stAuto.HdrAeRange.stPIrisRange.Min = 128;
+    expSwAttr.stAuto.HdrAeRange.stPIrisRange.Max = 512;
+
+    //stManual settings
+    expSwAttr.stManual.LinearAE.ManualTimeEn = true;
+    expSwAttr.stManual.LinearAE.ManualGainEn = true;
+    expSwAttr.stManual.LinearAE.ManualIspDgainEn = true;
+    expSwAttr.stManual.LinearAE.TimeValue = 1.0f / 100.0f;
+    expSwAttr.stManual.LinearAE.GainValue = 1;
+    expSwAttr.stManual.LinearAE.IspDGainValue = 1;
+    expSwAttr.stManual.HdrAE.ManualTimeEn = true;
+    expSwAttr.stManual.HdrAE.ManualGainEn = true;
+    expSwAttr.stManual.HdrAE.ManualIspDgainEn = true;
+    expSwAttr.stManual.HdrAE.TimeValue[0] = 1.0f / 100.0f;
+    expSwAttr.stManual.HdrAE.TimeValue[1] = 1.0f / 50.0f;
+    expSwAttr.stManual.HdrAE.TimeValue[2] = 1.0f / 25.0f;
+    expSwAttr.stManual.HdrAE.GainValue[0] = 1.0f;
+    expSwAttr.stManual.HdrAE.GainValue[1] = 1.0f;
+    expSwAttr.stManual.HdrAE.GainValue[2] = 1.0f;
+    expSwAttr.stManual.HdrAE.IspDGainValue[0] = 1.0f;
+    expSwAttr.stManual.HdrAE.IspDGainValue[1] = 1.0f;
+    expSwAttr.stManual.HdrAE.IspDGainValue[2] = 1.0f;
     result |= rk_aiq_user_api2_ae_setExpSwAttr(mpi_ctx.video_in.aiq_ctx,expSwAttr);
     
     memset(&expSwAttr,0,sizeof(expSwAttr));
@@ -348,7 +383,7 @@ bool LuckfoxMpi::init_vi()
     }
     enabled_flags.vi_enabled = true;
     return true;
-}
+}   
 
 /// @brief initialize vpss and bind to vi
 ///        must be called after init_vi()

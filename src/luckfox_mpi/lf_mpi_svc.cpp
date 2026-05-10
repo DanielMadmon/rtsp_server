@@ -1,5 +1,13 @@
 #include <memory>
 #include <chrono>
+
+extern "C" {
+#include <libavformat/avformat.h>
+#include <libavcodec/avcodec.h>
+#include <libavutil/avutil.h>
+#include <libavutil/opt.h>
+}
+
 #include "lf_mpi_svc.hpp"
 #include "lf_types.hpp"
 #include "generic_log.h"
@@ -91,6 +99,13 @@ lf_mpi::MpiSvc::~MpiSvc()
 }
 
 bool MpiSvc::init(){
+    AVFormatContext* av_format_ctx = nullptr;
+    av_format_ctx = avformat_alloc_context();
+    if(!av_format_ctx){
+        LOGE("failed to alloc av_format_ctx");
+    }else{
+        LOGI("allocated avformat ctx");
+    }
     if(init_done.load(memory_order_get)){
         return true;
     }
@@ -162,7 +177,6 @@ bool MpiSvc::init(){
     _send_vi_frame_thread_ctx.vi_release_frame = &LuckfoxMpi::vi_release_frame;
     _send_vi_frame_thread_ctx.venc_send_frame = &LuckfoxMpi::venc_send_frame;
     ret = false;
-    ///TODO:allow resizing with vpss_config->venc->rtsp
     ///TODO:allow seperate channel in venc output for file archiving to sd card
     switch (lf_config.vi_binding)
     {
@@ -530,8 +544,6 @@ void MpiSvc::send_rtsp_frame_thread(send_rtsp_frame_thread_ctx *thread_ctx)
 }
 
 
-/// TODO: fix cropping not working
-/// TODO: fix resizing not working
 bool MpiSvc::init_vi_transform(struct frame_transform_ctx& ctx){
     using frame_size = osd::bmp_resolution;
     using address = rga_buf::rga_buffer::rga_buf_addr_t;
@@ -553,7 +565,6 @@ bool MpiSvc::init_vi_transform(struct frame_transform_ctx& ctx){
     frame_size dst_fsz{},rot_dst_fsz{};
     //pre-allocate rga_buffer_t
     //pre-allocate rga_buffer_vectors
-    ///TODO: wrong maybe just crop/resize without rotating!
     if(lf_config.rotate_vi_frame && !crop_and_rotate && !resize_and_rotate){
         alloc_rot_dst = true;
         rot_dst_fsz = _send_vi_frame_thread_ctx.venc_frame_res;
@@ -641,7 +652,6 @@ TransformResult MpiSvc::apply_vi_transform(struct frame_transform_ctx& ctx,rga_b
         return TransformResult();
     }
     IM_STATUS status = IM_STATUS::IM_STATUS_FAILED;
-    ///TODO: wrong maybe just crop/resize without rotating!
     if(ctx.crop_and_rotate){
         im_rect crop_rect{
             .x = static_cast<int>(lf_config.crop_x),

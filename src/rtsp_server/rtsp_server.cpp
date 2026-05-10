@@ -33,7 +33,7 @@ int main(int argc, char **argv)
     config.stop_flag = &stop_flag;
     config.resize_vi_frame = false;
     config.rotate_vi_frame = false;
-    config.crop_vi_frame   = true;
+    config.crop_vi_frame   = false;
     config.rotation_opts = ROT_90;
     config.resize_or_crop_width = 1280;
     config.resize_or_crop_height = 720;

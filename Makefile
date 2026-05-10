@@ -7,7 +7,7 @@ OBJ_DIR = $(BUILD_DIR)/objs
 CROSS_COMPILE = arm-rockchip830-linux-uclibcgnueabihf-
 #CROSS_COMPILE = /opt/ivot/arm-ca9-linux-gnueabihf-6.5/bin/arm-ca9-linux-gnueabihf-
 CXX = $(CROSS_COMPILE)g++
-
+SYSROOT = ../luckfox-pico/sysdrv/source/buildroot/buildroot-2023.02.6/output/staging
 CXXFLAGS =  -I./src
 CXXFLAGS += -I./src/rtsp_server
 CXXFLAGS += -I./src/3rdpart
@@ -18,6 +18,8 @@ CXXFLAGS += -I./src/osd
 CXXFLAGS += -I./src/luckfox_mpi
 CXXFLAGS += -I./src/generic_log
 CXXFLAGS += -I./src/acetimec/src
+
+CXXFLAGS += -I$(SYSROOT)/usr/include
 #Rockchip libs
 RKLIBS_ROOT = ./rk_libs
 RKLIBS_INCLUDE := $(shell find $(RKLIBS_ROOT) -type d)
@@ -28,11 +30,12 @@ CXXFLAGS += -I$(INC_FLAGS)
 
 RKLIBS_LIB = $(RKLIBS_ROOT)/uclibc
 LDLIBS += -L$(RKLIBS_LIB) -lrockit -lrockchip_mpp -lrkaiq -lrga ./src/acetimec/src/acetimec.a
-
+LDLIBS += -L$(SYSROOT)/usr/lib
 CXXFLAGS += -Og -g -fPIC -pthread -fmessage-length=0 -std=c++17 -Wall -Werror=format
-CXXFLAGS += -fconcepts
 CXXFLAGS += -DDYN_LOG  -DISP_HW_V30 -DRKPLATFORM -DUAPI2 -DRTSP_DEBUG=0 -DDEBUG_MMZ
-LDFLAGS = -ldl -lm -lrt -lpthread 
+LDFLAGS = --sysroot=$(SYSROOT)
+LDFLAGS += -ldl -lm -lrt -lpthread -lavcodec -lavformat -lavutil
+
 
 $(shell mkdir -p $(LIB_DIR) $(OBJ_DIR))
 
@@ -94,5 +97,5 @@ clean:
 clean_lf:
 	rm -f $(OBJ_DIR)/osd.o
 	rm -f $(OBJ_DIR)/lf_mpi_svc.o
-
+	rm -f $(OBJ_DIR)/LuckfoxMpi.o
 .PHONY: all clean
