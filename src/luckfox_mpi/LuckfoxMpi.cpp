@@ -255,8 +255,8 @@ bool LuckfoxMpi::init_vi()
     expSwAttr.stAuto.stAntiFlicker.enable = true;
     expSwAttr.stAuto.stAntiFlicker.Frequency = CalibDb_FlickerFreqV2_t::AECV2_FLICKER_FREQUENCY_50HZ;
     expSwAttr.stAuto.stAntiFlicker.Mode = CalibDb_AntiFlickerModeV2_t::AECV2_ANTIFLICKER_AUTO_MODE;
-    expSwAttr.stAuto.LinAeRange.stExpTimeRange.Min = 2.45098035520641133E-5F;
-    expSwAttr.stAuto.LinAeRange.stExpTimeRange.Max = 0.0299999993;
+    expSwAttr.stAuto.LinAeRange.stExpTimeRange.Min = 1.0f / 40803.0f;
+    expSwAttr.stAuto.LinAeRange.stExpTimeRange.Max = 0.0299999993f;
     expSwAttr.stAuto.LinAeRange.stGainRange.Min = 1;
     expSwAttr.stAuto.LinAeRange.stGainRange.Max = 512;
     expSwAttr.stAuto.LinAeRange.stIspDGainRange.Min = 1;

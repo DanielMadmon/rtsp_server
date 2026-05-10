@@ -99,13 +99,6 @@ lf_mpi::MpiSvc::~MpiSvc()
 }
 
 bool MpiSvc::init(){
-    AVFormatContext* av_format_ctx = nullptr;
-    av_format_ctx = avformat_alloc_context();
-    if(!av_format_ctx){
-        LOGE("failed to alloc av_format_ctx");
-    }else{
-        LOGI("allocated avformat ctx");
-    }
     if(init_done.load(memory_order_get)){
         return true;
     }
