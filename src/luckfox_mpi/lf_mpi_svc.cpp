@@ -1,6 +1,6 @@
 #include <memory>
 #include <chrono>
-#include "ArchiveSvc.hpp"
+#include "HevcFileWriter.hpp"
 #include "lf_mpi_svc.hpp"
 #include "lf_types.hpp"
 #include "generic_log.h"
@@ -485,7 +485,7 @@ void MpiSvc::disconnect_callback(xop::MediaSessionId sessionId, std::string peer
     MpiSvc::client_conn_flag.store(st_conn_flag,memory_order_set);
 }
 
-using namespace archive_svc;
+using namespace hevc_file_writer;
 void MpiSvc::send_rtsp_frame_thread(send_rtsp_frame_thread_ctx *thread_ctx)
 {
     if(!thread_ctx){
@@ -505,7 +505,7 @@ void MpiSvc::send_rtsp_frame_thread(send_rtsp_frame_thread_ctx *thread_ctx)
         LOGE("send_venc_frame_thread called before init. exiting thread.");
         return;
     }
-    ArchiveSvc archive{};
+    HevcFileWriter archive{};
     archive.init(ArchiveSvcConfig{});
     size_t data_len = 0;
     ///timestamp

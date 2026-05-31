@@ -1,10 +1,10 @@
 #include <limits>
-#include "ArchiveSvc.hpp"
+#include "HevcFileWriter.hpp"
 
 namespace lf_mpi {
-namespace archive_svc {
+namespace hevc_file_writer {
 
-ArchiveSvc::ArchiveSvc() : 
+HevcFileWriter::HevcFileWriter() : 
     m_out_ctx(nullptr),
     m_stream_p(nullptr),
     m_header_written(false),
@@ -19,7 +19,7 @@ ArchiveSvc::ArchiveSvc() :
 /// @brief initialize ffmpeg and open file for output
 /// @param config ArchiveSvcConfig with params
 /// @return true on success
-bool ArchiveSvc::init(ArchiveSvcConfig config)
+bool HevcFileWriter::init(ArchiveSvcConfig config)
 {
     m_config = config;
     
@@ -72,10 +72,10 @@ bool ArchiveSvc::init(ArchiveSvcConfig config)
 /// @param len size in bytes
 /// @param pts_us microseconds timestamp from encoder
 /// @return true on success
-bool ArchiveSvc::write(uint8_t *annexb_data, size_t len, uint64_t pts_us)
+bool HevcFileWriter::write(uint8_t *annexb_data, size_t len, uint64_t pts_us)
 {
     if(!m_out_ctx || !m_stream_p){
-        LOGE("ArchiveSvc is not properly initialized");
+        LOGE("HevcFileWriter is not properly initialized");
         return false;
     }
     if(!annexb_data || len == 0){
@@ -258,7 +258,7 @@ bool ArchiveSvc::write(uint8_t *annexb_data, size_t len, uint64_t pts_us)
 /// @brief close file and write trailer
 /// @warning after call, must call init() before write()
 /// @return true on success
-bool ArchiveSvc::finalize()
+bool HevcFileWriter::finalize()
 {
     int ret{-1};
     if(!m_out_ctx || !m_header_written || !m_extradata_extracted){
@@ -288,7 +288,7 @@ bool ArchiveSvc::finalize()
     return ret;
 }
 
-void ArchiveSvc::cleanup()
+void HevcFileWriter::cleanup()
 {
     if(!m_finalize_done){
         finalize();
@@ -296,12 +296,12 @@ void ArchiveSvc::cleanup()
     }
 }
 
-ArchiveSvc::~ArchiveSvc() noexcept
+HevcFileWriter::~HevcFileWriter() noexcept
 {
     try{
         cleanup();
     }catch(const std::exception& e){
-        LOGE("caught %s in ArchiveSvc destructor", e.what());
+        LOGE("caught %s in HevcFileWriter destructor", e.what());
     }
 }
 

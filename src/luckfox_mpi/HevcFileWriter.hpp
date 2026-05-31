@@ -13,7 +13,7 @@ extern "C" {
 
 
 namespace lf_mpi{
-namespace archive_svc{
+namespace hevc_file_writer{
 
 using std::unique_ptr;
 using archive_svc_types::ArchiveSvcConfig;
@@ -53,13 +53,13 @@ using AvCodecParPtr = unique_ptr<AVCodecParameters,AvCodecParameterDeleter>;
 using AvPacketPtr = unique_ptr<AVPacket,AvPacketDeleter>;
 
 
-class ArchiveSvc{
+class HevcFileWriter{
 
     public:
-    ArchiveSvc();
-    ArchiveSvc(const ArchiveSvc&) = delete;
-    ~ArchiveSvc()noexcept;
-    ArchiveSvc& operator=(const ArchiveSvc&) = delete;
+    HevcFileWriter();
+    HevcFileWriter(const HevcFileWriter&) = delete;
+    ~HevcFileWriter()noexcept;
+    HevcFileWriter& operator=(const HevcFileWriter&) = delete;
     bool init(ArchiveSvcConfig config);
     bool write(uint8_t* annexb_data,size_t len,uint64_t pts_us);
     bool finalize();
