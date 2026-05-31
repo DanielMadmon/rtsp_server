@@ -5,10 +5,10 @@ LIB_DIR = $(BUILD_DIR)/bin
 OBJ_DIR = $(BUILD_DIR)/objs
 
 CROSS_COMPILE = arm-rockchip830-linux-uclibcgnueabihf-
-#CROSS_COMPILE = /opt/ivot/arm-ca9-linux-gnueabihf-6.5/bin/arm-ca9-linux-gnueabihf-
 CXX = $(CROSS_COMPILE)g++
 SYSROOT = ../luckfox-pico/sysdrv/source/buildroot/buildroot-2023.02.6/output/staging
 CXXFLAGS =  -I./src
+CXXFLAGS += -MMD
 CXXFLAGS += -I./src/rtsp_server
 CXXFLAGS += -I./src/3rdpart
 CXXFLAGS += -I./src/bsalgo
@@ -20,6 +20,7 @@ CXXFLAGS += -I./src/generic_log
 CXXFLAGS += -I./src/acetimec/src
 
 CXXFLAGS += -I$(SYSROOT)/usr/include
+CXXFLAGS += -I./src/3rdpart/boost/include
 #Rockchip libs
 RKLIBS_ROOT = ./rk_libs
 RKLIBS_INCLUDE := $(shell find $(RKLIBS_ROOT) -type d)
@@ -34,7 +35,7 @@ LDLIBS += -L$(SYSROOT)/usr/lib
 CXXFLAGS += -Og -g -fPIC -pthread -fmessage-length=0 -std=c++17 -Wall -Werror=format
 CXXFLAGS += -DDYN_LOG  -DISP_HW_V30 -DRKPLATFORM -DUAPI2 -DRTSP_DEBUG=0 -DDEBUG_MMZ
 LDFLAGS = --sysroot=$(SYSROOT)
-LDFLAGS += -ldl -lm -lrt -lpthread -lavcodec -lavformat -lavutil
+LDFLAGS += -ldl -lm -lrt -lpthread -lavcodec -lavformat -lavutil -lstdc++fs
 
 
 $(shell mkdir -p $(LIB_DIR) $(OBJ_DIR))
@@ -86,6 +87,7 @@ CXXOBJS10   = $(patsubst %.cpp, $(OBJ_DIR)/%.o, $(CXXFILES10))
 
 $(LIB_DIR)/$(TARGET0): $(CXXOBJS0) $(CXXOBJS1) $(CXXOBJS2) $(CXXOBJS3) $(CXXOBJS8) $(CXXOBJS9) $(CXXOBJS10)
 	$(CXX) $^ -o $@ $(LDFLAGS) $(LDLIBS)
+
 
 
 all: $(LIB_DIR)/$(TARGET0) 

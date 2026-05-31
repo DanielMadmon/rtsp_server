@@ -50,7 +50,7 @@ bool LuckfoxMpi::init_video_encoder(RK_CODEC_ID_E codec,uint32_t width,uint32_t 
     mpi_ctx.video_encoder.stChnAttr.stRcAttr.enRcMode = VENC_RC_MODE_H265CBR;
     mpi_ctx.video_encoder.stChnAttr.stRcAttr.stH265Cbr.u32BitRate = 8192;
     mpi_ctx.video_encoder.stChnAttr.stGopAttr.enGopMode = VENC_GOPMODE_NORMALP;
-    mpi_ctx.video_encoder.stChnAttr.stVencAttr.u32Profile = H265E_PROFILE_MAIN; //main 10 profile
+    mpi_ctx.video_encoder.stChnAttr.stVencAttr.u32Profile = H265E_PROFILE_MAIN; //main 0 profile
     mpi_ctx.video_encoder.stChnAttr.stVencAttr.enPixelFormat = RK_FMT_YUV420SP;
     mpi_ctx.video_encoder.stChnAttr.stVencAttr.u32PicWidth = width;
     mpi_ctx.video_encoder.stChnAttr.stVencAttr.u32PicHeight= height;

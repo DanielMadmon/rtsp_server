@@ -6,7 +6,6 @@
 #include "routing.hpp"
 #include "config.h"
 #include "generic_log.h"
-
 using namespace lf_mpi;
 using namespace std::chrono;
 
