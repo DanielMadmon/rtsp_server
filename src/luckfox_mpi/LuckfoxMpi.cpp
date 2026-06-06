@@ -5,6 +5,7 @@
 #include <string>
 #include <fstream>
 #include <memory>
+#include <chrono>
 #include <thread>
 #include "RgaUtils.h"
 #include "rk_mpi_mmz.h"
@@ -471,6 +472,9 @@ LuckfoxMpi::~LuckfoxMpi()
     if(enabled_flags.venc_enabled && rk_res == RK_SUCCESS){
         rk_res |= RK_MPI_VENC_DestroyChn(mpi_ctx.video_encoder.s32ChnId);
         LOGD("calling RK_MPI_VENC_DestroyChn(venc).res:%d",rk_res);
+        //fix of DMA contention after closing channel
+        RK_MPI_SYS_WaitFreeMB();
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }
     
     if(enabled_flags.vi_enabled && rk_res == RK_SUCCESS){
@@ -478,11 +482,14 @@ LuckfoxMpi::~LuckfoxMpi()
         LOGD("calling RK_MPI_VI_DisableChn. res:%d",rk_res);
         rk_res = RK_MPI_VI_DisableDev(mpi_ctx.video_in.s32DevId);
         LOGD("calling RK_MPI_VI_DisableDev. res%d",rk_res);
+        RK_MPI_SYS_WaitFreeMB();
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }
     if(rk_res == RK_SUCCESS){
         rk_res = rk_aiq_uapi2_sysctl_stop(mpi_ctx.video_in.aiq_ctx,true);
         rk_aiq_uapi2_sysctl_deinit(mpi_ctx.video_in.aiq_ctx);
         LOGD("calling  rk_aiq_uapi2_sysctl_stop. res:%d",rk_res);
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }
 }
 

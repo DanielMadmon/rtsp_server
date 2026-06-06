@@ -11,18 +11,22 @@ HevcFileWriter::HevcFileWriter() :
     m_extradata_extracted(false),
     m_err_buf{0},
     m_pts_us_base({false,0}),
-    m_config(ArchiveSvcConfig{}),
+    m_config(HevcFileWriterConfig{}),
     m_last_dts{AV_NOPTS_VALUE},
-    m_trailer_written{false}
+    m_trailer_written{false},
+    m_pool_alloc()
 {}
 
 /// @brief initialize ffmpeg and open file for output
-/// @param config ArchiveSvcConfig with params
+/// @param config HevcFileWriter with params
 /// @return true on success
-bool HevcFileWriter::init(ArchiveSvcConfig config)
+bool HevcFileWriter::init(HevcFileWriterConfig config)
 {
     m_config = config;
-    
+    if(!m_pool_alloc.init(150 * 1024)){
+        LOGE("in %s failed to initialize pool",LOC_FFNAME);
+        return false;
+    }
     // Initialize output context for MP4
     AVFormatContext* _av_format_ctx_raw{nullptr};
     int ret = avformat_alloc_output_context2(&_av_format_ctx_raw, nullptr,
@@ -62,7 +66,7 @@ bool HevcFileWriter::init(ArchiveSvcConfig config)
             return false;
         }
     }
-    m_finalize_done = true;
+    m_finalize_done = false;
     m_trailer_written = false;
     return true;
 }
@@ -112,30 +116,25 @@ bool HevcFileWriter::write(uint8_t *annexb_data, size_t len, uint64_t pts_us)
         return false;
     }
     
+    AVBufferRef* buffer = m_pool_alloc.get_buffer(len);
     // Copy data to FFmpeg-managed buffer
-    uint8_t* data_copy = static_cast<uint8_t*>(av_malloc(len));
-    if(!data_copy){
+    if(!buffer){
         LOGE("failed to allocate data buffer, size:%zu", len);
         return false;
     }
-    memcpy(data_copy, annexb_data, len);
+    if(buffer->size < static_cast<int>(len)){
+        LOGE("failed to allocate data buffer, size:%zu", len);
+        av_buffer_unref(&buffer);
+        return false;
+    }
+    memcpy(buffer->data, annexb_data, len);
     
-    packet->data = data_copy;
+    packet->data = buffer->data;
     packet->size = static_cast<int>(len);
     packet->pts = pts;
     packet->dts = pts;  // after testing RV1106 outputs only I/P frames
     packet->stream_index = m_stream_p->index;
-    
-    // Create buffer with destructor
-    packet->buf = av_buffer_create(data_copy, len, 
-        [](void* opaque, uint8_t* data) { av_free(data); }, 
-        nullptr, 0);
-    
-    if(!packet->buf){
-        av_free(data_copy);
-        LOGE("failed to create av_buffer");
-        return false;
-    }
+    packet->buf = buffer;
     
     // Detect keyframes to set flag
     if(len >= 5){
@@ -198,6 +197,9 @@ bool HevcFileWriter::write(uint8_t *annexb_data, size_t len, uint64_t pts_us)
         }
         
         if(!extradata.empty()){
+            if(m_stream_p->codecpar->extradata){
+                av_freep(&m_stream_p->codecpar->extradata);
+            }
             // Set extradata for the stream
             m_stream_p->codecpar->extradata = 
                 static_cast<uint8_t*>(av_mallocz(extradata.size() + AV_INPUT_BUFFER_PADDING_SIZE));
@@ -247,6 +249,7 @@ bool HevcFileWriter::write(uint8_t *annexb_data, size_t len, uint64_t pts_us)
     // Write packet
     ret = av_interleaved_write_frame(m_out_ctx.get(), packet.get());
     if(ret != 0){
+
         av_strerror(ret, m_err_buf, sizeof(m_err_buf));
         LOGE("av_interleaved_write_frame failed: %s", m_err_buf);
         return false;
@@ -271,6 +274,13 @@ bool HevcFileWriter::finalize()
         LOGE("av_write_trailer failed: %s", m_err_buf);
     }
     m_trailer_written = ret == 0;
+    if(!(m_out_ctx->oformat && !(m_out_ctx->oformat->flags & AVFMT_NOFILE))){
+        ret = avio_closep(&m_out_ctx->pb);
+        if(ret != 0){
+            av_strerror(ret, m_err_buf, AV_ERROR_MAX_STRING_SIZE);
+            LOGE("avio_closep failed: %s", m_err_buf);
+        }
+    }
     if(m_stream_p && m_stream_p->codecpar && m_stream_p->codecpar->extradata){
         av_freep(&m_stream_p->codecpar->extradata);
         m_stream_p->codecpar->extradata_size = 0;
@@ -292,7 +302,6 @@ void HevcFileWriter::cleanup()
 {
     if(!m_finalize_done){
         finalize();
-        avio_closep(&m_out_ctx->pb);
     }
 }
 
@@ -305,5 +314,5 @@ HevcFileWriter::~HevcFileWriter() noexcept
     }
 }
 
-} // namespace archive_svc
+} // namespace hevc_file_writer
 } // namespace lf_mpi

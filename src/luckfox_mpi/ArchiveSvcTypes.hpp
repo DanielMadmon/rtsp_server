@@ -2,6 +2,13 @@
 #include "utils.hpp"
 #include "lf_types.hpp"
 #include <string>
+#include <atomic>
+extern "C" {
+#include <libavformat/avformat.h>
+#include <libavcodec/avcodec.h>
+#include <libavutil/avutil.h>
+#include <libavutil/opt.h>
+}
 
 namespace lf_mpi{
 namespace archive_svc_types{
@@ -19,7 +26,7 @@ struct ArchiveSvcResolution{
     {}
 };
 
-struct ArchiveSvcConfig{
+struct HevcFileWriterConfig{
     flag*  stop_flag{nullptr};
     //max file size in megabytes
     size_t max_file_size{256};
@@ -37,6 +44,5 @@ namespace comptime_consts{
     constexpr std::array<uint8_t,3> START_CODE_PREFIX_3 {0x00, 0x00, 0x01}; // 3-byte start code
     constexpr uintmax_t MB{1048576ull};
 }
-
 }
 }

@@ -4,6 +4,7 @@
 #include "utils.hpp"
 #include "ArchiveSvcTypes.hpp"
 #include "generic_log.h"
+#include "PacketPoolAllocator.hpp"
 extern "C" {
 #include <libavformat/avformat.h>
 #include <libavcodec/avcodec.h>
@@ -16,7 +17,7 @@ namespace lf_mpi{
 namespace hevc_file_writer{
 
 using std::unique_ptr;
-using archive_svc_types::ArchiveSvcConfig;
+using archive_svc_types::HevcFileWriterConfig;
 struct AvOutCtxDeletr{
         void operator()(AVFormatContext* ctx){
             if(ctx){
@@ -60,7 +61,7 @@ class HevcFileWriter{
     HevcFileWriter(const HevcFileWriter&) = delete;
     ~HevcFileWriter()noexcept;
     HevcFileWriter& operator=(const HevcFileWriter&) = delete;
-    bool init(ArchiveSvcConfig config);
+    bool init(HevcFileWriterConfig config);
     bool write(uint8_t* annexb_data,size_t len,uint64_t pts_us);
     bool finalize();
     void cleanup();
@@ -76,10 +77,11 @@ class HevcFileWriter{
         bool init_done{false};
         uint64_t pts_us{0};
     }m_pts_us_base;
-    ArchiveSvcConfig m_config;
+    HevcFileWriterConfig m_config;
     int64_t m_last_dts{AV_NOPTS_VALUE};
     bool m_trailer_written{false};
     bool m_finalize_done{false};
+    packet_pool_allocator::PacketPoolAllocator m_pool_alloc{};
 };
 
 }

@@ -7,6 +7,7 @@
 #include "acetimec.h"
 #include "mmz_alloc.hpp"
 #include "routing.hpp"
+#include "ArchiveSvc.hpp"
 
 using namespace lf_mpi;
 using namespace std::chrono;
@@ -506,12 +507,13 @@ void MpiSvc::send_rtsp_frame_thread(send_rtsp_frame_thread_ctx *thread_ctx)
         return;
     }
     HevcFileWriter archive{};
-    archive.init(ArchiveSvcConfig{});
+    archive.init(HevcFileWriterConfig{});
     size_t data_len = 0;
     ///timestamp
     uint64_t ts = 0;
     uint8_t* venc_stream = nullptr;
     xop::AVFrame video_frame{};
+    uint64_t max = 0;
     while(!thread_ctx->stop_flag->load(memory_order_get)){
         if(venc_stream && !svc->client_conn_flag.load(memory_order_get)){
             svc->mpi_handle->venc_release_stream();
@@ -523,17 +525,23 @@ void MpiSvc::send_rtsp_frame_thread(send_rtsp_frame_thread_ctx *thread_ctx)
             svc->idr_reset.store(false,memory_order_set);
             if(!venc_stream){
                 LOGE("Failed to get venc stream,line:%d",__LINE__);
+                LOGI("max size:%llu",max);
                 return;
             }
             archive.write(venc_stream,data_len,ts);
+            if(data_len > max){
+                max = data_len;
+            }
             continue;
         }
         archive.finalize();
+        return;
         video_frame.buffer.reset();
         venc_stream = 
             svc->mpi_handle->venc_get_stream(svc->idr_reset.load(memory_order_get),&data_len,&ts);
         if(!venc_stream || data_len == 0){
             LOGE("Failed to get venc stream,line:%d",__LINE__);
+            LOGI("max size:%llu",max);
             return;
         }
         svc->idr_reset.store(false,memory_order_set);
@@ -543,6 +551,7 @@ void MpiSvc::send_rtsp_frame_thread(send_rtsp_frame_thread_ctx *thread_ctx)
         xop::H265Source::GetTimestamp(&video_frame.timeNow,&video_frame.timestamp);
         thread_ctx->rtsp_server->PushFrame(thread_ctx->session_id,xop::channel_0,video_frame);
     }
+    LOGI("max size:%llu",max);
 }
 
 
